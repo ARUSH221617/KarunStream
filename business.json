@@ -1,0 +1,142 @@
+{
+    "name": "KarunStream",
+    "overview": "KarunStream is an internet-independent, cross-platform LAN application designed for real-time chat and high-speed file transfers. It provides an offline-first, zero-configuration solution for users needing secure, high-bandwidth data exchange across fragmented platforms like iOS, Android, Windows, and macOS without relying on cloud servers.",
+    "brandValues": [
+        "Privacy-first",
+        "Zero-configuration",
+        "Cross-platform compatibility",
+        "Offline-first"
+    ],
+    "visualAesthetics": [
+        "Modern",
+        "Clean",
+        "Seamless",
+        "Efficient"
+    ],
+    "toneOfVoice": [
+        "Technical",
+        "Precise",
+        "Professional",
+        "Utility-focused"
+    ],
+    "brandColors": [
+        "#253858",
+        "#42526E",
+        "#FF8B00",
+        "#FFFFFF"
+    ],
+    "fonts": [
+        "Kanit",
+        "Vazirmatn"
+    ],
+    "campaigns": [
+        {
+            "creatives": [
+                {
+                    "title": "Stop Sending Files to the Cloud",
+                    "versions": [
+                        {
+                            "fileName": "resource_aAH_WWoRhv8exf4PV1rOMI.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "0% Internet. 100% Speed.",
+                    "versions": [
+                        {
+                            "fileName": "resource_agddgZqTAzk6UJ0apuo4Je.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "OS Barriers Are Gone",
+                    "versions": [
+                        {
+                            "fileName": "resource_aMrRKCkWhgC7KL8s7GNOic.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "Your Data Stays in the Room",
+                    "versions": [
+                        {
+                            "fileName": "resource_ao5qHMkOtQf0C5KBSlR_An.png"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "creatives": [
+                {
+                    "title": "No Bars. No Problem.",
+                    "versions": [
+                        {
+                            "fileName": "resource_aeiK4dlorGM9EEuhBVf_3K.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "The High-Speed Data Bottleneck",
+                    "versions": [
+                        {
+                            "fileName": "resource_b-7X1isFrjQ4fS9sghn4GR.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "10Gbps Without the Cloud",
+                    "versions": [
+                        {
+                            "fileName": "resource_9qc8AmgFNe1a-gHIAcGOkW.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "Mission Accomplished. Offline.",
+                    "versions": [
+                        {
+                            "fileName": "resource_94KiDDh6Ikp8Q7SNmbKk4-.png"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "creatives": [
+                {
+                    "title": "No Signal? No Problem.",
+                    "versions": [
+                        {
+                            "fileName": "resource_9GmCnlOyc2a78IaR3Vnk5a.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "Field-Tested Data Privacy",
+                    "versions": [
+                        {
+                            "fileName": "resource_9p7ygrc5DIrfuJai-s1OzA.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "Coordinate Without Cell Bars",
+                    "versions": [
+                        {
+                            "fileName": "resource_9k7Ub3nsa9d3OuzPFxr_aE.png"
+                        }
+                    ]
+                },
+                {
+                    "title": "Built for Peak Season",
+                    "versions": [
+                        {
+                            "fileName": "resource_blKag5yc5sM0o9tsnCI4ry.png"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
