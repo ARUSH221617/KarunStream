@@ -4,6 +4,7 @@ enum MainTab {
   dashboard(Icons.dashboard_outlined, 'Dashboard'),
   connect(Icons.connect_without_contact_outlined, 'Connect'),
   chat(Icons.forum_outlined, 'Chat'),
+  files(Icons.folder_copy_outlined, 'Files'),
   peers(Icons.groups_2_outlined, 'Peers');
 
   const MainTab(this.iconData, this.label);

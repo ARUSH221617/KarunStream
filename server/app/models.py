@@ -52,7 +52,21 @@ class FileOfferPayload(BaseModel):
     file_size: int = Field(ge=0)
     sha256: str = Field(min_length=64, max_length=64)
     chunk_size: int | None = None
+    download_url: str | None = None
     timestamp: float = Field(default_factory=time)
+
+
+class FileTransferRecord(BaseModel):
+    transfer_id: str = Field(default_factory=lambda: str(uuid4()))
+    sender_id: str
+    recipient_id: str
+    file_name: str
+    bytes: int = Field(ge=0)
+    sha256: str = Field(min_length=64, max_length=64)
+    stored_path: str
+    download_url: str
+    created_at: float = Field(default_factory=time)
+    duration_seconds: float
 
 
 class WebSocketEvent(BaseModel):

@@ -7,6 +7,7 @@ class FileOffer {
     required this.sha256,
     this.receiverId,
     this.chunkSize,
+    this.downloadUrl,
   });
 
   final String transferId;
@@ -16,6 +17,7 @@ class FileOffer {
   final int fileSize;
   final String sha256;
   final int? chunkSize;
+  final String? downloadUrl;
 
   factory FileOffer.fromJson(Map<String, dynamic> json) {
     return FileOffer(
@@ -26,6 +28,7 @@ class FileOffer {
       fileSize: json['file_size'] as int? ?? 0,
       sha256: json['sha256'] as String? ?? '',
       chunkSize: json['chunk_size'] as int?,
+      downloadUrl: json['download_url'] as String?,
     );
   }
 
@@ -38,6 +41,7 @@ class FileOffer {
       'file_size': fileSize,
       'sha256': sha256,
       if (chunkSize != null) 'chunk_size': chunkSize,
+      if (downloadUrl != null) 'download_url': downloadUrl,
     };
   }
 }

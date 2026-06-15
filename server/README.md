@@ -6,7 +6,7 @@ Python LAN daemon/API for KarunStream, built from the PRD as a Docker-ready Fast
 
 - HTTP status and peer roster endpoints under `/api/v1`.
 - WebSocket orchestration at `/ws/orchestrator` for peer registration, heartbeat, chat, and file-offer events.
-- Chunked multipart upload endpoint at `/api/v1/files/upload` with SHA-256 calculation and filename sanitization.
+- Chunked multipart upload endpoint at `/api/v1/files/upload` with SHA-256 calculation, filename sanitization, transfer metadata, and download links.
 - mDNS advertisement for `_karunstream._tcp.local.` when host networking allows multicast.
 - Rolling local logs and configurable upload/log directories.
 
@@ -61,6 +61,19 @@ The first message sent after connecting registers the peer:
   "avatar_index": 1
 }
 ```
+
+## File Sharing API
+
+Upload a file with peer headers:
+
+```bash
+curl -F "file=@./demo.zip" \
+  -H "X-Sender-ID: peer-a" \
+  -H "X-Recipient-ID: peer-b" \
+  http://localhost:8080/api/v1/files/upload
+```
+
+The response includes `transfer_id`, `sha256`, `bytes`, and `download_url`. Peers can list available transfers with `GET /api/v1/files?peer_id=peer-b`, inspect one transfer with `GET /api/v1/files/{transfer_id}`, and download bytes with `GET /api/v1/files/{transfer_id}/download`. Uploaders can delete their own server copy with `DELETE /api/v1/files/{transfer_id}` and the `X-Peer-ID` header.
 
 Subsequent messages use the shared event wrapper:
 

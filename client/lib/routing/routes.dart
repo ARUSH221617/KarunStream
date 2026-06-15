@@ -11,6 +11,7 @@ class Routes {
   static const dashboard = '/dashboard';
   static const connect = '/connect';
   static const chat = '/chat';
+  static const files = '/files';
   static const peers = '/peers';
   static const profile = '/profile';
 

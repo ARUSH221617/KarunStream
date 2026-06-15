@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,8 @@ import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../model/chat_message.dart';
+import '../model/file_offer.dart';
+import '../model/file_transfer.dart';
 import '../model/karun_event.dart';
 import '../model/karun_peer.dart';
 import '../model/server_status.dart';
@@ -29,6 +32,10 @@ class LanWorkspaceState {
     this.status,
     this.peers = const [],
     this.messages = const [],
+    this.fileOffers = const [],
+    this.files = const [],
+    this.transferProgress = 0,
+    this.isTransferring = false,
     this.isConnecting = false,
     this.isConnected = false,
     this.error,
@@ -40,6 +47,10 @@ class LanWorkspaceState {
   final ServerStatus? status;
   final List<KarunPeer> peers;
   final List<ChatMessage> messages;
+  final List<FileOffer> fileOffers;
+  final List<FileTransfer> files;
+  final double transferProgress;
+  final bool isTransferring;
   final bool isConnecting;
   final bool isConnected;
   final String? error;
@@ -50,6 +61,10 @@ class LanWorkspaceState {
     ServerStatus? status,
     List<KarunPeer>? peers,
     List<ChatMessage>? messages,
+    List<FileOffer>? fileOffers,
+    List<FileTransfer>? files,
+    double? transferProgress,
+    bool? isTransferring,
     bool? isConnecting,
     bool? isConnected,
     String? error,
@@ -62,6 +77,10 @@ class LanWorkspaceState {
       status: status ?? this.status,
       peers: peers ?? this.peers,
       messages: messages ?? this.messages,
+      fileOffers: fileOffers ?? this.fileOffers,
+      files: files ?? this.files,
+      transferProgress: transferProgress ?? this.transferProgress,
+      isTransferring: isTransferring ?? this.isTransferring,
       isConnecting: isConnecting ?? this.isConnecting,
       isConnected: isConnected ?? this.isConnected,
       error: clearError ? null : error ?? this.error,
@@ -169,6 +188,147 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     _sendEvent('CHAT_MESSAGE', message.toJson());
   }
 
+  Future<void> uploadAndOfferFile({
+    required String fileName,
+    String? filePath,
+    Uint8List? bytes,
+    String recipientId = 'global',
+  }) async {
+    final serverUri = state.serverUri;
+    if (!state.isConnected || serverUri == null) {
+      state = state.copyWith(error: 'Connect to a LAN server before sharing files.');
+      return;
+    }
+    if (filePath == null && bytes == null) {
+      state = state.copyWith(error: 'Select a readable file before sharing.');
+      return;
+    }
+
+    state = state.copyWith(
+      isTransferring: true,
+      transferProgress: 0,
+      clearError: true,
+    );
+
+    try {
+      final transfer = await _repository.uploadFile(
+        serverUri: serverUri,
+        fileName: fileName,
+        filePath: filePath,
+        bytes: bytes,
+        senderId: state.peerId,
+        recipientId: recipientId,
+        onSendProgress: (sent, total) {
+          if (total > 0) {
+            state = state.copyWith(transferProgress: sent / total);
+          }
+        },
+      );
+      final offer = FileOffer(
+        transferId: transfer.transferId,
+        senderId: transfer.senderId,
+        receiverId: recipientId == 'global' ? null : recipientId,
+        fileName: transfer.fileName,
+        fileSize: transfer.bytes,
+        sha256: transfer.sha256,
+        downloadUrl: transfer.downloadUrl,
+      );
+      _sendEvent('FILE_OFFER', offer.toJson());
+      state = state.copyWith(
+        files: [transfer, ...state.files],
+        fileOffers: [offer, ...state.fileOffers],
+        transferProgress: 1,
+        isTransferring: false,
+      );
+    } catch (error) {
+      state = state.copyWith(
+        isTransferring: false,
+        error: 'File upload failed: $error',
+      );
+    }
+  }
+
+  Future<void> refreshFiles() async {
+    final serverUri = state.serverUri;
+    if (serverUri == null) {
+      return;
+    }
+    try {
+      final files = await _repository.fetchFiles(serverUri, peerId: state.peerId);
+      state = state.copyWith(files: files, clearError: true);
+    } catch (error) {
+      state = state.copyWith(error: 'Could not refresh files: $error');
+    }
+  }
+
+  Future<bool> downloadFile({
+    required String transferId,
+    required String savePath,
+  }) async {
+    final serverUri = state.serverUri;
+    if (serverUri == null) {
+      state = state.copyWith(error: 'Connect to a LAN server before downloading files.');
+      return false;
+    }
+
+    state = state.copyWith(
+      isTransferring: true,
+      transferProgress: 0,
+      clearError: true,
+    );
+    try {
+      await _repository.downloadFile(
+        serverUri: serverUri,
+        transferId: transferId,
+        savePath: savePath,
+        onReceiveProgress: (received, total) {
+          if (total > 0) {
+            state = state.copyWith(transferProgress: received / total);
+          }
+        },
+      );
+      state = state.copyWith(
+        isTransferring: false,
+        transferProgress: 1,
+        clearError: true,
+      );
+      return true;
+    } catch (error) {
+      state = state.copyWith(
+        isTransferring: false,
+        error: 'File download failed: $error',
+      );
+      return false;
+    }
+  }
+
+  Future<void> deleteUploadedFile(String transferId) async {
+    final serverUri = state.serverUri;
+    if (serverUri == null) {
+      state = state.copyWith(error: 'Connect to a LAN server before deleting files.');
+      return;
+    }
+
+    try {
+      await _repository.deleteFile(
+        serverUri: serverUri,
+        transferId: transferId,
+        peerId: state.peerId,
+      );
+      state = state.copyWith(
+        files: state.files
+            .where((file) => file.transferId != transferId)
+            .toList(),
+        fileOffers: state.fileOffers
+            .where((offer) => offer.transferId != transferId)
+            .toList(),
+        clearError: true,
+      );
+    } catch (error) {
+      state = state.copyWith(error: 'File delete failed: $error');
+    }
+  }
+
   void updateNickname(String nickname) {
     final trimmedNickname = nickname.trim();
     if (trimmedNickname.isNotEmpty) {
@@ -207,6 +367,15 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
             ChatMessage.fromJson(event.payload),
           ],
         );
+        break;
+      case 'FILE_OFFER':
+        state = state.copyWith(
+          fileOffers: [
+            FileOffer.fromJson(event.payload),
+            ...state.fileOffers,
+          ],
+        );
+        refreshFiles();
         break;
       case 'ERROR':
         state = state.copyWith(error: event.payload['message'] as String?);

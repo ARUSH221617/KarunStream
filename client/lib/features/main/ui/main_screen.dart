@@ -23,7 +23,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     if (location.startsWith(Routes.dashboard)) return 0;
     if (location.startsWith(Routes.connect)) return 1;
     if (location.startsWith(Routes.chat)) return 2;
-    if (location.startsWith(Routes.peers)) return 3;
+    if (location.startsWith(Routes.files)) return 3;
+    if (location.startsWith(Routes.peers)) return 4;
     return 0;
   }
 
@@ -39,6 +40,9 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         context.go(Routes.chat);
         break;
       case 3:
+        context.go(Routes.files);
+        break;
+      case 4:
         context.go(Routes.peers);
         break;
     }

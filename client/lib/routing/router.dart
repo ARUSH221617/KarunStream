@@ -18,6 +18,7 @@ import '../features/profile/model/profile.dart';
 import '../features/smart_dashboard/ui/smart_dashboard_screen.dart';
 import '../features/karunstream/ui/connect_screen.dart';
 import '../features/karunstream/ui/chat_screen.dart';
+import '../features/karunstream/ui/files_screen.dart';
 import '../features/karunstream/ui/peers_screen.dart';
 import 'routes.dart';
 
@@ -172,6 +173,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: Routes.chat,
             pageBuilder: (context, state) =>
                 state.slidePage(const ChatScreen()),
+          ),
+          GoRoute(
+            path: Routes.files,
+            pageBuilder: (context, state) =>
+                state.slidePage(const FilesScreen()),
           ),
           GoRoute(
             path: Routes.peers,

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../model/file_transfer.dart';
 import '../model/karun_event.dart';
 import '../model/karun_peer.dart';
 import '../model/server_status.dart';
@@ -39,6 +41,81 @@ class LanServerRepository {
           ),
         )
         .toList();
+  }
+
+  Future<FileTransfer> uploadFile({
+    required Uri serverUri,
+    required String fileName,
+    required String senderId,
+    required String recipientId,
+    String? filePath,
+    Uint8List? bytes,
+    ProgressCallback? onSendProgress,
+  }) async {
+    final multipartFile = filePath != null
+        ? await MultipartFile.fromFile(filePath, filename: fileName)
+        : MultipartFile.fromBytes(bytes ?? Uint8List(0), filename: fileName);
+    final formData = FormData.fromMap({
+      'file': multipartFile,
+    });
+    final response = await _dio.postUri<Map<String, dynamic>>(
+      serverUri.replace(path: '/api/v1/files/upload'),
+      data: formData,
+      options: Options(
+        headers: {
+          'X-Sender-ID': senderId,
+          'X-Recipient-ID': recipientId,
+        },
+      ),
+      onSendProgress: onSendProgress,
+    );
+    return FileTransfer.fromJson(response.data ?? {});
+  }
+
+  Future<List<FileTransfer>> fetchFiles(
+    Uri serverUri, {
+    String? peerId,
+  }) async {
+    final response = await _dio.getUri<Map<String, dynamic>>(
+      serverUri.replace(
+        path: '/api/v1/files',
+        queryParameters: {
+          if (peerId != null) 'peer_id': peerId,
+        },
+      ),
+    );
+    final files = response.data?['files'] as List? ?? const [];
+    return files
+        .map(
+          (file) => FileTransfer.fromJson(
+            Map<String, dynamic>.from(file as Map),
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> downloadFile({
+    required Uri serverUri,
+    required String transferId,
+    required String savePath,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    await _dio.downloadUri(
+      serverUri.replace(path: '/api/v1/files/$transferId/download'),
+      savePath,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<void> deleteFile({
+    required Uri serverUri,
+    required String transferId,
+    required String peerId,
+  }) async {
+    await _dio.deleteUri<void>(
+      serverUri.replace(path: '/api/v1/files/$transferId'),
+      options: Options(headers: {'X-Peer-ID': peerId}),
+    );
   }
 
   WebSocketChannel connectSocket(
