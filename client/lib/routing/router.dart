@@ -1,0 +1,214 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+
+import '../features/authentication/state/auth_provider.dart';
+import '../features/authentication/ui/otp_screen.dart';
+import '../features/authentication/ui/register_screen.dart';
+import '../features/authentication/ui/sign_in_screen.dart';
+import '../features/authentication/ui/welcome_screen.dart';
+import '../features/onboarding/ui/onboarding_screen.dart';
+import '../features/onboarding/ui/splash_screen.dart';
+import '../features/main/ui/main_screen.dart';
+import '../features/profile/ui/profile_screen.dart';
+import '../features/profile/ui/account_info_screen.dart';
+import '../features/profile/ui/appearances_screen.dart';
+import '../features/profile/ui/languages_screen.dart';
+import '../features/profile/model/profile.dart';
+import '../features/smart_dashboard/ui/smart_dashboard_screen.dart';
+import '../features/karunstream/ui/connect_screen.dart';
+import '../features/karunstream/ui/chat_screen.dart';
+import '../features/karunstream/ui/peers_screen.dart';
+import 'routes.dart';
+
+enum SlideDirection {
+  right,
+  left,
+  up,
+  down,
+}
+
+extension GoRouterStateExtension on GoRouterState {
+  SlideRouteTransition slidePage(
+    Widget child, {
+    SlideDirection direction = SlideDirection.left,
+  }) {
+    return SlideRouteTransition(
+      key: pageKey,
+      child: child,
+      direction: direction,
+    );
+  }
+}
+
+class SlideRouteTransition extends CustomTransitionPage<void> {
+  SlideRouteTransition({
+    required super.key,
+    required super.child,
+    SlideDirection direction = SlideDirection.left,
+  }) : super(
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final curve = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeInOut,
+            );
+
+            Offset begin;
+            switch (direction) {
+              case SlideDirection.right:
+                begin = const Offset(-1.0, 0.0);
+                break;
+              case SlideDirection.left:
+                begin = const Offset(1.0, 0.0);
+                break;
+              case SlideDirection.up:
+                begin = const Offset(0.0, 1.0);
+                break;
+              case SlideDirection.down:
+                begin = const Offset(0.0, -1.0);
+                break;
+            }
+            final tween = Tween(begin: begin, end: Offset.zero);
+            final offsetAnimation = tween.animate(curve);
+
+            return SlideTransition(
+              position: offsetAnimation,
+              child: child,
+            );
+          },
+        );
+}
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
+
+final routerProvider = Provider<GoRouter>((ref) {
+  final isLoggedIn = ref.watch(isLoggedInProvider);
+
+  return GoRouter(
+    navigatorKey: rootNavigatorKey,
+    initialLocation: Routes.splash,
+    redirect: (context, state) {
+      final location = state.matchedLocation;
+
+      final isPublicRoute = location == Routes.splash ||
+          location == Routes.welcome ||
+          location == Routes.login ||
+          location == Routes.register ||
+          location == Routes.otp;
+
+      if (!isLoggedIn && !isPublicRoute) {
+        return Routes.welcome;
+      }
+
+      if (isLoggedIn &&
+          (location == Routes.login ||
+              location == Routes.welcome ||
+              location == Routes.splash)) {
+        return Routes.dashboard;
+      }
+
+      return null;
+    },
+    routes: [
+      GoRoute(
+        path: Routes.splash,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) => state.slidePage(const SplashScreen()),
+      ),
+      GoRoute(
+        path: Routes.welcome,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) => state.slidePage(const WelcomeScreen()),
+      ),
+      GoRoute(
+        path: Routes.register,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            state.slidePage(const RegisterScreen()),
+      ),
+      GoRoute(
+        path: Routes.login,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) => state.slidePage(const SignInScreen()),
+      ),
+      GoRoute(
+          path: Routes.otp,
+          parentNavigatorKey: rootNavigatorKey,
+          pageBuilder: (context, state) {
+            final map = state.extra as Map?;
+            return state.slidePage(
+              OtpScreen(
+                email: map?['email'],
+                isRegister: map?['isRegister'],
+              ),
+            );
+          }),
+      GoRoute(
+        path: Routes.onboarding,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            state.slidePage(const OnboardingScreen()),
+      ),
+
+      // Shell route for bottom navigation
+      ShellRoute(
+        navigatorKey: shellNavigatorKey,
+        builder: (context, state, child) {
+          return MainScreen(child: child);
+        },
+        routes: [
+          GoRoute(
+            path: Routes.dashboard,
+            pageBuilder: (context, state) =>
+                state.slidePage(const SmartDashboardScreen()),
+          ),
+          GoRoute(
+            path: Routes.connect,
+            pageBuilder: (context, state) =>
+                state.slidePage(const ConnectScreen()),
+          ),
+          GoRoute(
+            path: Routes.chat,
+            pageBuilder: (context, state) =>
+                state.slidePage(const ChatScreen()),
+          ),
+          GoRoute(
+            path: Routes.peers,
+            pageBuilder: (context, state) =>
+                state.slidePage(const PeersScreen()),
+          ),
+        ],
+      ),
+
+      GoRoute(
+        path: Routes.profile,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) => state.slidePage(const ProfileScreen()),
+      ),
+
+      // Profile sub-routes
+      GoRoute(
+        path: Routes.accountInformation,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) {
+          final profile = state.extra as Profile?;
+          return state.slidePage(
+              AccountInfoScreen(originalProfile: profile ?? Profile()));
+        },
+      ),
+      GoRoute(
+        path: Routes.appearances,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            state.slidePage(const AppearancesScreen()),
+      ),
+      GoRoute(
+        path: Routes.languages,
+        parentNavigatorKey: rootNavigatorKey,
+        pageBuilder: (context, state) =>
+            state.slidePage(const LanguagesScreen()),
+      ),
+    ],
+  );
+});

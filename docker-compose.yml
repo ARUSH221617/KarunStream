@@ -1,0 +1,23 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    container_name: karunstream-server
+    environment:
+      KARUNSTREAM_HOST: 0.0.0.0
+      KARUNSTREAM_PORT: 8080
+      # Set this to your PC's real Wi-Fi IP (e.g. 192.168.1.15) 
+      # so other devices can find the server inside Docker.
+      KARUNSTREAM_ADVERTISED_IP: "" 
+      KARUNSTREAM_UPLOAD_DIR: /data/uploads
+      KARUNSTREAM_LOG_DIR: /data/logs
+      KARUNSTREAM_ENABLE_MDNS: "true"
+    ports:
+      - "8080:8080/tcp"
+    volumes:
+      - ./server/app:/app/app:ro
+      - karunstream-data:/data
+
+volumes:
+  karunstream-data:

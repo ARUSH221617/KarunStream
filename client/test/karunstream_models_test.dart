@@ -1,0 +1,49 @@
+import 'package:karunstream/features/karunstream/model/chat_message.dart';
+import 'package:karunstream/features/karunstream/model/karun_event.dart';
+import 'package:karunstream/features/karunstream/model/karun_peer.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('KarunPeer parses server peer payload', () {
+    final peer = KarunPeer.fromJson({
+      'peer_id': 'u1',
+      'nickname': 'Sarah',
+      'platform': 'iOS',
+      'ip': '192.168.1.15',
+      'avatar_index': 2,
+    });
+
+    expect(peer.peerId, 'u1');
+    expect(peer.nickname, 'Sarah');
+    expect(peer.platform, 'iOS');
+    expect(peer.ip, '192.168.1.15');
+    expect(peer.avatarIndex, 2);
+  });
+
+  test('ChatMessage round trips shared schema fields', () {
+    final message = ChatMessage(
+      messageId: 'm1',
+      senderId: 'u1',
+      receiverId: 'global',
+      body: 'Ready to test this stream?',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(1718290312000),
+    );
+
+    final json = message.toJson();
+    final parsed = ChatMessage.fromJson(json);
+
+    expect(json['msg_id'], 'm1');
+    expect(parsed.body, 'Ready to test this stream?');
+    expect(parsed.receiverId, 'global');
+  });
+
+  test('KarunEvent wraps protocol payloads', () {
+    final event = KarunEvent.fromJson({
+      'event_type': 'HEARTBEAT',
+      'payload': {'timestamp': 1718290312},
+    });
+
+    expect(event.eventType, 'HEARTBEAT');
+    expect(event.payload['timestamp'], 1718290312);
+  });
+}
