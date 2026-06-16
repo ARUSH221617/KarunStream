@@ -105,6 +105,7 @@ class AuthenticationViewModel extends _$AuthenticationViewModel {
       updateProfile(authResponse.user!);
     }
     _repository.setIsLogin(true);
+    ref.read(isGuestModeProvider.notifier).setGuestMode(false);
     // END TODO
 
     state = AsyncData(
@@ -125,6 +126,7 @@ class AuthenticationViewModel extends _$AuthenticationViewModel {
       avatar = metaData['avatar_url'];
     }
     ref.read(profileViewModelProvider.notifier).updateProfile(
+          id: user.id,
           email: user.email,
           name: name,
           avatar: avatar,

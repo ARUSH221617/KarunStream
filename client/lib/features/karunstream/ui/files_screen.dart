@@ -64,15 +64,10 @@ class FilesScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               Expanded(
-                child: state.fileOffers.isEmpty && state.files.isEmpty
+                child: state.files.isEmpty
                     ? const Center(child: Text('Shared files will appear here.'))
                     : ListView(
                         children: [
-                          for (final offer in state.fileOffers)
-                            _FileOfferTile(
-                              offer: offer,
-                              isMine: offer.senderId == state.peerId,
-                            ),
                           for (final file in state.files)
                             _FileTransferTile(file: file),
                         ],
@@ -101,45 +96,6 @@ class FilesScreen extends ConsumerWidget {
   }
 }
 
-class _FileOfferTile extends ConsumerWidget {
-  const _FileOfferTile({
-    required this.offer,
-    required this.isMine,
-  });
-
-  final FileOffer offer;
-  final bool isMine;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ListTile(
-      leading: const Icon(Icons.insert_drive_file),
-      title: Text(offer.fileName),
-      subtitle: Text(
-        '${_formatBytes(offer.fileSize)} • ${_shortHash(offer.sha256)}',
-      ),
-      trailing: Wrap(
-        spacing: 4,
-        children: [
-          IconButton(
-            tooltip: 'Download',
-            onPressed: offer.downloadUrl == null
-                ? null
-                : () => _downloadOffer(context, ref, offer),
-            icon: const Icon(Icons.download_outlined),
-          ),
-          if (isMine)
-            IconButton(
-              tooltip: 'Delete uploaded file',
-              onPressed: () => _confirmDelete(context, ref, offer.transferId),
-              icon: const Icon(Icons.delete_outline),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _FileTransferTile extends ConsumerWidget {
   const _FileTransferTile({required this.file});
 
@@ -147,40 +103,29 @@ class _FileTransferTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return ListTile(
-      leading: const Icon(Icons.cloud_done_outlined),
-      title: Text(file.fileName),
-      subtitle: Text('Uploaded • ${_formatBytes(file.bytes)}'),
-      trailing: Wrap(
-        spacing: 4,
-        children: [
-          IconButton(
-            tooltip: 'Download',
-            onPressed: () => _downloadTransfer(context, ref, file),
-            icon: const Icon(Icons.download_outlined),
-          ),
-          IconButton(
-            tooltip: 'Delete uploaded file',
-            onPressed: () => _confirmDelete(context, ref, file.transferId),
-            icon: const Icon(Icons.delete_outline),
-          ),
-        ],
+    final theme = Theme.of(context);
+    return Dismissible(
+      key: Key('file_${file.transferId}'),
+      direction: DismissDirection.startToEnd,
+      confirmDismiss: (_) => _confirmDelete(context, ref, file.transferId),
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 20),
+        color: theme.colorScheme.error,
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.cloud_done_outlined),
+        title: Text(file.fileName),
+        subtitle: Text('Uploaded • ${_formatBytes(file.bytes)}'),
+        trailing: IconButton(
+          tooltip: 'Download',
+          onPressed: () => _downloadTransfer(context, ref, file),
+          icon: const Icon(Icons.download_outlined),
+        ),
       ),
     );
   }
-}
-
-Future<void> _downloadOffer(
-  BuildContext context,
-  WidgetRef ref,
-  FileOffer offer,
-) async {
-  await _downloadFile(
-    context,
-    ref,
-    transferId: offer.transferId,
-    fileName: offer.fileName,
-  );
 }
 
 Future<void> _downloadTransfer(
@@ -224,7 +169,7 @@ Future<void> _downloadFile(
   }
 }
 
-Future<void> _confirmDelete(
+Future<bool?> _confirmDelete(
   BuildContext context,
   WidgetRef ref,
   String transferId,
@@ -250,12 +195,12 @@ Future<void> _confirmDelete(
   );
 
   if (confirmed == true) {
-    await ref.read(lanWorkspaceProvider.notifier).deleteUploadedFile(transferId);
+    await ref
+        .read(lanWorkspaceProvider.notifier)
+        .deleteUploadedFile(transferId);
   }
-}
 
-String _shortHash(String sha256) {
-  return sha256.substring(0, sha256.length < 12 ? sha256.length : 12);
+  return confirmed;
 }
 
 String _formatBytes(int bytes) {

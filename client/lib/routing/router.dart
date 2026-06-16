@@ -85,6 +85,7 @@ final GlobalKey<NavigatorState> shellNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
   final isLoggedIn = ref.watch(isLoggedInProvider);
+  final isGuest = ref.watch(isGuestModeProvider);
 
   return GoRouter(
     navigatorKey: rootNavigatorKey,
@@ -103,6 +104,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (isLoggedIn &&
+          !isGuest &&
           (location == Routes.login ||
               location == Routes.welcome ||
               location == Routes.splash)) {

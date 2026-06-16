@@ -29,6 +29,7 @@ class ProfileViewModel extends _$ProfileViewModel {
   }
 
   Future<void> updateProfile({
+    String? id,
     String? email,
     String? name,
     String? avatar,
@@ -39,11 +40,13 @@ class ProfileViewModel extends _$ProfileViewModel {
       final currentProfile = state.value?.profile;
 
       final updatedProfile = currentProfile?.copyWith(
+            id: id ?? currentProfile.id,
             email: email ?? currentProfile.email,
             name: name ?? currentProfile.name,
             avatar: newAvatarPath ?? currentProfile.avatar,
           ) ??
           Profile(
+            id: id,
             email: email,
             name: name,
             avatar: newAvatarPath,

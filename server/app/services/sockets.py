@@ -82,15 +82,19 @@ class PeerRegistry:
             await self.send(sender_id, EventType.HEARTBEAT, {"timestamp": time()})
             return
 
-        if event.event_type == EventType.CHAT_MESSAGE:
+        if event.event_type in {EventType.CHAT_MESSAGE, EventType.CHAT_EDIT}:
             payload = ChatPayload(**event.payload)
             outgoing = payload.model_dump(mode="json")
             if payload.receiver_id == "global":
-                await self.broadcast(EventType.CHAT_MESSAGE, outgoing)
+                await self.broadcast(event.event_type, outgoing)
             else:
-                delivered = await self.send(payload.receiver_id, EventType.CHAT_MESSAGE, outgoing)
+                delivered = await self.send(payload.receiver_id, event.event_type, outgoing)
                 if not delivered:
                     await self.send(sender_id, EventType.ERROR, {"message": "Recipient is not connected"})
+            return
+
+        if event.event_type == EventType.CHAT_DELETE:
+            await self.broadcast(EventType.CHAT_DELETE, event.payload)
             return
 
         if event.event_type == EventType.FILE_OFFER:

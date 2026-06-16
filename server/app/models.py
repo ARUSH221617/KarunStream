@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from enum import StrEnum
 from time import time
 from typing import Any, Literal
@@ -11,9 +13,12 @@ class EventType(StrEnum):
     PEER_LEAVE = "PEER_LEAVE"
     PEER_LIST = "PEER_LIST"
     CHAT_MESSAGE = "CHAT_MESSAGE"
+    CHAT_EDIT = "CHAT_EDIT"
+    CHAT_DELETE = "CHAT_DELETE"
     FILE_OFFER = "FILE_OFFER"
     FILE_ACCEPT = "FILE_ACCEPT"
     FILE_DECLINE = "FILE_DECLINE"
+    FILE_DELETED = "FILE_DELETED"
     HEARTBEAT = "HEARTBEAT"
     ERROR = "ERROR"
 
@@ -41,7 +46,9 @@ class ChatPayload(BaseModel):
     receiver_id: str = "global"
     body: str
     message_type: Literal["text", "system", "link"] = "text"
+    is_edited: bool = False
     timestamp: float = Field(default_factory=time)
+    file_offers: list[FileOfferPayload] = Field(default_factory=list)
 
 
 class FileOfferPayload(BaseModel):

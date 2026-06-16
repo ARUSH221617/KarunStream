@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -141,77 +143,109 @@ class LanServerRepository {
   }
 
   Future<List<Uri>> discoverServers({
-    Duration timeout = const Duration(seconds: 2),
+    Duration timeout = const Duration(seconds: 4),
   }) async {
     final available = <Uri>{};
     final candidates = <Uri>{
       Uri.parse('http://127.0.0.1:8080'),
       Uri.parse('http://localhost:8080'),
-      Uri.parse('http://10.0.2.2:8080'),
+      Uri.parse('http://10.0.2.2:8080'), // Android Emulator loopback
     };
 
     // 1. Try mDNS Discovery
-    final client = MDnsClient();
-    try {
-      await client.start();
-      const String serviceType = '_karunstream._tcp.local';
-      await for (final PtrResourceRecord ptr in client
-          .lookup<PtrResourceRecord>(
-            ResourceRecordQuery.serverPointer(serviceType),
-          )
-          .timeout(const Duration(milliseconds: 1500),
-              onTimeout: (sink) => sink.close())) {
-        await for (final SrvResourceRecord srv in client.lookup<SrvResourceRecord>(
-          ResourceRecordQuery.service(ptr.domainName),
-        )) {
-          await for (final IPAddressResourceRecord ip
-              in client.lookup<IPAddressResourceRecord>(
-            ResourceRecordQuery.addressIPv4(srv.target),
+    if (!kIsWeb) {
+      final client = MDnsClient(
+        rawDatagramSocketFactory: (
+          dynamic host,
+          int port, {
+          bool reuseAddress = true,
+          bool reusePort = true,
+          int ttl = 1,
+        }) {
+          return RawDatagramSocket.bind(
+            host,
+            port,
+            reuseAddress: reuseAddress,
+            reusePort: !Platform.isAndroid && !Platform.isWindows && reusePort,
+            ttl: ttl,
+          );
+        },
+      );
+      try {
+        await client.start();
+        const String serviceType = '_karunstream._tcp.local';
+        await for (final PtrResourceRecord ptr in client
+            .lookup<PtrResourceRecord>(
+              ResourceRecordQuery.serverPointer(serviceType),
+            )
+            .timeout(const Duration(milliseconds: 1500),
+                onTimeout: (sink) => sink.close())) {
+          await for (final SrvResourceRecord srv in client.lookup<SrvResourceRecord>(
+            ResourceRecordQuery.service(ptr.domainName),
           )) {
-            candidates.add(Uri.parse('http://${ip.address.address}:${srv.port}'));
+            await for (final IPAddressResourceRecord ip
+                in client.lookup<IPAddressResourceRecord>(
+              ResourceRecordQuery.addressIPv4(srv.target),
+            )) {
+              candidates.add(Uri.parse('http://${ip.address.address}:${srv.port}'));
+            }
           }
         }
+      } catch (e) {
+        developer.log('mDNS Discovery failed: $e', name: 'karunstream.discovery');
+      } finally {
+        client.stop();
       }
-    } catch (_) {} finally {
-      client.stop();
     }
 
     // 2. Parallel Subnet Scan (The "Zero-Config" miracle)
-    try {
-      final interfaces = await NetworkInterface.list(
-        includeLinkLocal: false,
-        type: InternetAddressType.IPv4,
-      );
+    if (!kIsWeb) {
+      try {
+        final interfaces = await NetworkInterface.list(
+          includeLinkLocal: false,
+          type: InternetAddressType.IPv4,
+        );
 
-      for (final interface in interfaces) {
-        final address = interface.addresses.first.address;
-        if (address.startsWith('127.')) continue;
-
-        final base = address.substring(0, address.lastIndexOf('.') + 1);
-        final List<Future<void>> scans = [];
-
-        for (int i = 1; i < 255; i++) {
-          final targetIp = '$base$i';
-          if (targetIp == address) continue;
-
-          scans.add(() async {
-            final uri = Uri.parse('http://$targetIp:8080');
-            try {
-              await fetchStatus(uri).timeout(const Duration(milliseconds: 500));
-              available.add(uri);
-            } catch (_) {}
-          }());
+        final List<String> subnets = [];
+        for (final interface in interfaces) {
+          for (final addr in interface.addresses) {
+            final address = addr.address;
+            if (address.startsWith('127.')) continue;
+            final base = address.substring(0, address.lastIndexOf('.') + 1);
+            if (!subnets.contains(base)) subnets.add(base);
+          }
         }
-        await Future.wait(scans);
-      }
-    } catch (_) {}
 
-    // 3. Final validation of static candidates
+        for (final base in subnets) {
+          // Scan in chunks to avoid overwhelming the socket limit
+          const int chunkSize = 32;
+          for (int i = 1; i < 255; i += chunkSize) {
+            final List<Future<void>> chunkScans = [];
+            for (int j = i; j < i + chunkSize && j < 255; j++) {
+              final targetIp = '$base$j';
+              chunkScans.add(() async {
+                final uri = Uri.parse('http://$targetIp:8080');
+                try {
+                  // Increased timeout to 1 second for more reliable scanning
+                  await fetchStatus(uri).timeout(const Duration(milliseconds: 1000));
+                  available.add(uri);
+                } catch (_) {}
+              }());
+            }
+            await Future.wait(chunkScans);
+          }
+        }
+      } catch (e) {
+        developer.log('Subnet scan failed: $e', name: 'karunstream.discovery');
+      }
+    }
+
+    // 3. Final validation of static candidates (including loopbacks)
     await Future.wait(
       candidates.map((candidate) async {
         try {
           await fetchStatus(candidate)
-              .timeout(const Duration(milliseconds: 600));
+              .timeout(const Duration(milliseconds: 1000));
           available.add(candidate);
         } catch (_) {}
       }),

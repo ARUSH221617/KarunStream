@@ -116,6 +116,7 @@ async def delete_file(
 
     Path(record.stored_path).unlink(missing_ok=True)
     file_registry.remove(transfer_id)
+    await registry.broadcast("FILE_DELETED", {"transfer_id": transfer_id})
 
 
 def _get_existing_record(transfer_id: str) -> FileTransferRecord:

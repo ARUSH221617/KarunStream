@@ -24,7 +24,7 @@
     <application
         android:label="KarunStream"
         android:name="${applicationName}"
-        android:icon="@mipmap/smart_icon"
+        android:icon="@mipmap/launcher_icon"
         android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true">
         <activity

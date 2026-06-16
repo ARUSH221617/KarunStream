@@ -60,7 +60,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           16,
-          16,
+          64,
           16,
           128,
         ),

@@ -12,9 +12,16 @@ class ConnectionPanel extends ConsumerStatefulWidget {
 }
 
 class _ConnectionPanelState extends ConsumerState<ConnectionPanel> {
-  final _serverController =
-      TextEditingController(text: 'http://127.0.0.1:8080');
-  final _nicknameController = TextEditingController(text: 'KarunStream User');
+  late final TextEditingController _serverController;
+  late final TextEditingController _nicknameController;
+
+  @override
+  void initState() {
+    super.initState();
+    final state = ref.read(lanWorkspaceProvider);
+    _serverController = TextEditingController(text: 'http://127.0.0.1:8080');
+    _nicknameController = TextEditingController(text: state.nickname);
+  }
 
   @override
   void dispose() {
@@ -152,9 +159,18 @@ class _ConnectionPanelState extends ConsumerState<ConnectionPanel> {
                         tooltip: 'Auto-discover',
                         onPressed: state.isConnecting || state.isConnected
                             ? null
-                            : ref
-                                .read(lanWorkspaceProvider.notifier)
-                                .autoDiscoverAndConnect,
+                            : () {
+                                final manualUri = Uri.tryParse(
+                                  _serverController.text.trim(),
+                                );
+                                ref
+                                    .read(lanWorkspaceProvider.notifier)
+                                    .autoDiscoverAndConnect(
+                                  preferredCandidates: [
+                                    if (manualUri != null) manualUri,
+                                  ],
+                                );
+                              },
                         icon: const Icon(Icons.radar),
                       ),
                     ],

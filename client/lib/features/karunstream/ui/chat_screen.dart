@@ -14,19 +14,6 @@ class ChatScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.forum_outlined),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Lobby Chat',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w700),
-                  ),
-                ],
-              ),
               const SizedBox(height: 12),
               const Expanded(child: MessageList()),
               const SizedBox(height: 12),
