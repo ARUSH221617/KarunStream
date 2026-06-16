@@ -24,6 +24,12 @@ class MessageList extends ConsumerWidget {
     }
 
     return ListView.builder(
+      padding: const EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: 90, // Space for the floating composer
+      ),
       itemCount: state.messages.length,
       itemBuilder: (context, index) {
         final message = state.messages[index];
@@ -101,7 +107,7 @@ class _ChatMessageBubble extends ConsumerWidget {
                         'Edited',
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: (isMe ? Colors.white : theme.colorScheme.onSurface)
-                              .withOpacity(0.5),
+                              .withValues(alpha: 0.5),
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -110,7 +116,7 @@ class _ChatMessageBubble extends ConsumerWidget {
                     timeStr,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: (isMe ? Colors.white : theme.colorScheme.onSurface)
-                          .withOpacity(0.5),
+                          .withValues(alpha: 0.5),
                     ),
                   ),
                 ],
@@ -141,7 +147,7 @@ class _ChatMessageBubble extends ConsumerWidget {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -222,8 +228,8 @@ class _FileAttachment extends ConsumerWidget {
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: isMe
-            ? Colors.white.withOpacity(0.15)
-            : theme.colorScheme.surface.withOpacity(0.5),
+            ? Colors.white.withValues(alpha: 0.15)
+            : theme.colorScheme.surface.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -255,7 +261,7 @@ class _FileAttachment extends ConsumerWidget {
                   Text(
                     _formatBytes(offer.fileSize),
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: foregroundColor.withOpacity(0.7),
+                      color: foregroundColor.withValues(alpha: 0.7),
                     ),
                   ),
               ],

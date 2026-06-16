@@ -7,20 +7,20 @@ class ChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              const Expanded(child: MessageList()),
-              const SizedBox(height: 12),
-              const MessageComposer(),
-            ],
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          const Positioned.fill(
+            child: MessageList(),
           ),
-        ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: MessageComposer(),
+          ),
+        ],
       ),
     );
   }

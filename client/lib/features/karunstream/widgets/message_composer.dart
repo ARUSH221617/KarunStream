@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,7 +48,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     final theme = Theme.of(context);
     final state = ref.watch(lanWorkspaceProvider);
 
-    ref.listen(lanWorkspaceProvider.select((s) => s.editingMessage), (prev, next) {
+    ref.listen(lanWorkspaceProvider.select((s) => s.editingMessage),
+        (prev, next) {
       if (next != null && prev?.messageId != next.messageId) {
         _controller.text = next.body;
       } else if (next == null && prev != null) {
@@ -55,7 +57,9 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       }
     });
 
-    final canAttach = state.isConnected && !state.isTransferring && state.editingMessage == null;
+    final canAttach = state.isConnected &&
+        !state.isTransferring &&
+        state.editingMessage == null;
     final canSend =
         state.isConnected && (!_isTextEmpty || _pendingFiles.isNotEmpty);
 
@@ -68,115 +72,96 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
             onRemove: (index) => setState(() => _pendingFiles.removeAt(index)),
           ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // Main input container
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest
-                        .withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: theme.colorScheme.outlineVariant.withOpacity(0.5),
-                    ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: _GlassContainer(
+            borderRadius: BorderRadius.circular(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (state.editingMessage != null)
+                  _EditMessageBanner(
+                    message: state.editingMessage!,
+                    onCancel: () =>
+                        ref.read(lanWorkspaceProvider.notifier).cancelEditing(),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (state.editingMessage != null)
-                        _EditMessageBanner(
-                          message: state.editingMessage!,
-                          onCancel: () => ref
-                              .read(lanWorkspaceProvider.notifier)
-                              .cancelEditing(),
-                        ),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // Attachment Button
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4.0, bottom: 4.0),
-                            child: IconButton(
-                              tooltip: 'Share file',
-                              onPressed: canAttach ? _attachFile : null,
-                              icon: state.isTransferring
-                                  ? SizedBox.square(
-                                      dimension: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: theme.colorScheme.primary,
-                                      ),
-                                    )
-                                  : Icon(
-                                      Icons.add_circle_outline_rounded,
-                                      color: canAttach ? null : theme.disabledColor,
-                                    ),
-                            ),
-                          ),
-
-                          // Text Field
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                              child: TextField(
-                                controller: _controller,
-                                enabled: state.isConnected,
-                                minLines: 1,
-                                maxLines: 5,
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
-                                style: theme.textTheme.bodyLarge,
-                                decoration: InputDecoration(
-                                  hintText: state.editingMessage != null
-                                      ? 'Edit message...'
-                                      : 'Send a message...',
-                                  fillColor: Colors.transparent,
-                                  border: InputBorder.none,
-                                  focusedBorder: InputBorder.none,
-                                  enabledBorder: InputBorder.none,
-                                  disabledBorder: InputBorder.none,
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(vertical: 12.0),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Attachment Button
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6.0, bottom: 6.0),
+                      child: IconButton(
+                        tooltip: 'Share file',
+                        onPressed: canAttach ? _attachFile : null,
+                        icon: state.isTransferring
+                            ? SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: theme.colorScheme.primary,
                                 ),
+                              )
+                            : Icon(
+                                Icons.add_circle_outline_rounded,
+                                color: canAttach ? null : theme.disabledColor,
                               ),
-                            ),
-                          ),
-                        ],
                       ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
+                    ),
 
-              // Send Button
-              Padding(
-                padding: const EdgeInsets.only(bottom: 2.0),
-                child: IconButton.filled(
-                  onPressed: canSend ? _send : null,
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    backgroundColor: canSend
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.surfaceContainerHighest,
-                    disabledBackgroundColor: theme
-                        .colorScheme.surfaceContainerHighest
-                        .withOpacity(0.3),
-                  ),
-                  icon: Icon(
-                    state.editingMessage != null
-                        ? Icons.check_rounded
-                        : Icons.send_rounded,
-                    color: canSend
-                        ? theme.colorScheme.onPrimary
-                        : theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
-                  ),
+                    // Text Field
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: TextField(
+                          controller: _controller,
+                          enabled: state.isConnected,
+                          minLines: 1,
+                          maxLines: 5,
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          style: theme.textTheme.bodyLarge,
+                          decoration: InputDecoration(
+                            hintText: 'Message',
+                            fillColor: Colors.transparent,
+                            border: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 16.0),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Send Button
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6.0, bottom: 6.0),
+                      child: IconButton.filled(
+                        onPressed: canSend ? _send : null,
+                        style: IconButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: theme.colorScheme.onPrimary,
+                          disabledBackgroundColor: theme
+                              .colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.3),
+                          disabledForegroundColor: theme
+                              .colorScheme.onSurfaceVariant
+                              .withValues(alpha: 0.4),
+                          minimumSize: const Size(48, 48),
+                        ),
+                        icon: Icon(
+                          state.editingMessage != null
+                              ? Icons.check_rounded
+                              : Icons.send_rounded,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -237,6 +222,49 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   }
 }
 
+class _GlassContainer extends StatelessWidget {
+  const _GlassContainer({
+    required this.child,
+    this.borderRadius,
+  });
+
+  final Widget child;
+  final BorderRadius? borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            color:
+                (isDark ? Colors.black : Colors.white).withValues(alpha: 0.1),
+            borderRadius: borderRadius ?? BorderRadius.circular(24),
+            border: Border.all(
+              color:
+                  (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class _EditMessageBanner extends StatelessWidget {
   const _EditMessageBanner({
     required this.message,
@@ -254,7 +282,7 @@ class _EditMessageBanner extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -343,10 +371,10 @@ class _FilePreviewItem extends StatelessWidget {
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+          color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
       ),
       child: Row(

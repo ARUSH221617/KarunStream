@@ -5,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../model/file_offer.dart';
 import '../model/file_transfer.dart';
 import '../state/lan_workspace_controller.dart';
 
