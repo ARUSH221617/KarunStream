@@ -224,12 +224,24 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     _sendEvent('CHAT_MESSAGE', message.toJson());
   }
 
-  void editChat(String messageId, String newBody) {
+  void editChat(String messageId, String newBody, {List<FileOffer>? fileOffers}) {
     final trimmedBody = newBody.trim();
-    if (trimmedBody.isEmpty) return;
-    
     final message = state.messages.firstWhere((m) => m.messageId == messageId);
-    final updatedMessage = message.copyWith(body: trimmedBody, isEdited: true);
+    
+    // Check if anything actually changed
+    final isBodyChanged = trimmedBody.isNotEmpty && trimmedBody != message.body;
+    final isFilesChanged = fileOffers != null && !listEquals(fileOffers, message.fileOffers);
+    
+    if (!isBodyChanged && !isFilesChanged) {
+      cancelEditing();
+      return;
+    }
+
+    final updatedMessage = message.copyWith(
+      body: trimmedBody, 
+      fileOffers: fileOffers ?? message.fileOffers,
+      isEdited: true,
+    );
     
     _sendEvent('CHAT_EDIT', updatedMessage.toJson());
     cancelEditing();

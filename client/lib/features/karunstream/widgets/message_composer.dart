@@ -20,6 +20,7 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   final _controller = TextEditingController();
   bool _isTextEmpty = true;
   final List<XFile> _pendingFiles = [];
+  List<FileOffer> _editingAttachedFiles = [];
 
   @override
   void initState() {
@@ -47,29 +48,46 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final state = ref.watch(lanWorkspaceProvider);
+    final notifier = ref.read(lanWorkspaceProvider.notifier);
 
     ref.listen(lanWorkspaceProvider.select((s) => s.editingMessage),
         (prev, next) {
       if (next != null && prev?.messageId != next.messageId) {
         _controller.text = next.body;
+        setState(() {
+          _editingAttachedFiles = List.from(next.fileOffers);
+          _pendingFiles.clear();
+        });
       } else if (next == null && prev != null) {
         _controller.clear();
+        setState(() {
+          _editingAttachedFiles.clear();
+          _pendingFiles.clear();
+        });
       }
     });
 
-    final canAttach = state.isConnected &&
-        !state.isTransferring &&
-        state.editingMessage == null;
-    final canSend =
-        state.isConnected && (!_isTextEmpty || _pendingFiles.isNotEmpty);
+    final canAttach = state.isConnected && !state.isTransferring;
+    final canSend = state.isConnected &&
+        (!_isTextEmpty ||
+            _pendingFiles.isNotEmpty ||
+            _editingAttachedFiles.isNotEmpty);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_pendingFiles.isNotEmpty)
+        if (_pendingFiles.isNotEmpty || _editingAttachedFiles.isNotEmpty)
           _FilesPreviewList(
-            files: _pendingFiles,
-            onRemove: (index) => setState(() => _pendingFiles.removeAt(index)),
+            existingFiles: _editingAttachedFiles,
+            newFiles: _pendingFiles,
+            onRemoveExisting: (index) =>
+                setState(() => _editingAttachedFiles.removeAt(index)),
+            onRemoveNew: (index) => setState(() => _pendingFiles.removeAt(index)),
+            onDeleteExisting: (index) {
+              final offer = _editingAttachedFiles[index];
+              notifier.deleteUploadedFile(offer.transferId);
+              setState(() => _editingAttachedFiles.removeAt(index));
+            },
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -81,8 +99,9 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
                 if (state.editingMessage != null)
                   _EditMessageBanner(
                     message: state.editingMessage!,
-                    onCancel: () =>
-                        ref.read(lanWorkspaceProvider.notifier).cancelEditing(),
+                    onCancel: () => ref
+                        .read(lanWorkspaceProvider.notifier)
+                        .cancelEditing(),
                   ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -175,12 +194,26 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     final notifier = ref.read(lanWorkspaceProvider.notifier);
 
     if (state.editingMessage != null) {
-      if (text.isNotEmpty && text != state.editingMessage!.body) {
-        notifier.editChat(state.editingMessage!.messageId, text);
-      } else {
-        notifier.cancelEditing();
+      final List<FileOffer> allOffers = List.from(_editingAttachedFiles);
+      if (files.isNotEmpty) {
+        for (final file in files) {
+          final offer = await notifier.uploadFileOnly(
+            fileName: file.name,
+            filePath: kIsWeb || file.path.isEmpty ? null : file.path,
+            bytes: kIsWeb || file.path.isEmpty ? await file.readAsBytes() : null,
+          );
+          if (offer != null) {
+            allOffers.add(offer);
+          }
+        }
       }
+      notifier.editChat(state.editingMessage!.messageId, text,
+          fileOffers: allOffers);
       _controller.clear();
+      setState(() {
+        _editingAttachedFiles.clear();
+        _pendingFiles.clear();
+      });
       return;
     }
 
@@ -327,28 +360,40 @@ class _EditMessageBanner extends StatelessWidget {
 
 class _FilesPreviewList extends StatelessWidget {
   const _FilesPreviewList({
-    required this.files,
-    required this.onRemove,
+    required this.existingFiles,
+    required this.newFiles,
+    required this.onRemoveExisting,
+    required this.onRemoveNew,
+    required this.onDeleteExisting,
   });
 
-  final List<XFile> files;
-  final void Function(int) onRemove;
+  final List<FileOffer> existingFiles;
+  final List<XFile> newFiles;
+  final void Function(int) onRemoveExisting;
+  final void Function(int) onRemoveNew;
+  final void Function(int) onDeleteExisting;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
+      height: 52,
       margin: const EdgeInsets.only(top: 8),
-      child: ListView.builder(
+      child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: files.length,
-        itemBuilder: (context, index) {
-          return _FilePreviewItem(
-            file: files[index],
-            onRemove: () => onRemove(index),
-          );
-        },
+        children: [
+          ...existingFiles.asMap().entries.map((e) => _FilePreviewItem(
+                fileName: e.value.fileName,
+                isExisting: true,
+                onRemove: () => onRemoveExisting(e.key),
+                onDelete: () => onDeleteExisting(e.key),
+              )),
+          ...newFiles.asMap().entries.map((e) => _FilePreviewItem(
+                fileName: e.value.name,
+                isExisting: false,
+                onRemove: () => onRemoveNew(e.key),
+              )),
+        ],
       ),
     );
   }
@@ -356,18 +401,22 @@ class _FilesPreviewList extends StatelessWidget {
 
 class _FilePreviewItem extends StatelessWidget {
   const _FilePreviewItem({
-    required this.file,
+    required this.fileName,
+    required this.isExisting,
     required this.onRemove,
+    this.onDelete,
   });
 
-  final XFile file;
+  final String fileName;
+  final bool isExisting;
   final VoidCallback onRemove;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      width: 180,
+      width: 200,
       margin: const EdgeInsets.only(right: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -379,11 +428,15 @@ class _FilePreviewItem extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.insert_drive_file_outlined, size: 20),
+          Icon(
+            isExisting ? Icons.cloud_done_outlined : Icons.insert_drive_file_outlined,
+            size: 20,
+            color: isExisting ? theme.colorScheme.primary : null,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              file.name,
+              fileName,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(
@@ -391,12 +444,45 @@ class _FilePreviewItem extends StatelessWidget {
               ),
             ),
           ),
+          if (isExisting && onDelete != null)
+            IconButton(
+              onPressed: () => _showDeleteDialog(context),
+              icon: const Icon(Icons.delete_forever_outlined, size: 18, color: Colors.red),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              visualDensity: VisualDensity.compact,
+              tooltip: 'Delete from server',
+            ),
           IconButton(
             onPressed: onRemove,
             icon: const Icon(Icons.close, size: 16),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
             visualDensity: VisualDensity.compact,
+            tooltip: 'Detach',
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete from Server?'),
+        content: const Text('This will permanently delete the file from the server for everyone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onDelete?.call();
+            },
+            child: const Text('DELETE', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

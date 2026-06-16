@@ -56,6 +56,7 @@ class ChatMessage {
   ChatMessage copyWith({
     String? body,
     bool? isEdited,
+    List<FileOffer>? fileOffers,
   }) {
     return ChatMessage(
       messageId: messageId,
@@ -65,7 +66,7 @@ class ChatMessage {
       timestamp: timestamp,
       messageType: messageType,
       isEdited: isEdited ?? this.isEdited,
-      fileOffers: fileOffers,
+      fileOffers: fileOffers ?? this.fileOffers,
     );
   }
 }
