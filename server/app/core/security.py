@@ -14,7 +14,8 @@ def ensure_tls_certificate(tls_dir: Path) -> tuple[Path, Path]:
 
 
 def sanitize_filename(filename: str) -> str:
-    cleaned = Path(filename).name.strip().replace("\x00", "")
+    normalized = filename.replace("\\", "/")
+    cleaned = Path(normalized).name.strip().replace("\x00", "")
     cleaned = cleaned.replace("/", "_").replace("\\", "_")
     return cleaned or f"karunstream-file-{uuid4().hex}"
 
