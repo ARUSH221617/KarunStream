@@ -29,6 +29,7 @@ dependencies:
   google_sign_in: ^7.2.0
   hugeicons: ^1.1.7
   image_picker: ^1.2.0
+  file_picker: ^8.1.2
   json_annotation: ^4.9.0
   lottie: ^3.3.2
   ming_cute_icons: ^0.0.7

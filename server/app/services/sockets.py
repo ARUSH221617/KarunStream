@@ -4,7 +4,8 @@ from time import time
 from fastapi import WebSocket
 from pydantic import ValidationError
 
-from app.models import ChatPayload, EventType, FileOfferPayload, Peer, PeerRegistration, WebSocketEvent
+from app.models import ChatPayload, EventType, FileOfferPayload, Peer, PeerRegistration, WebSocketEvent, SharedFolderRecord
+from app.services.shares import share_registry
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,9 @@ class PeerRegistry:
         self._connections.pop(peer_id, None)
         if peer:
             await self.broadcast(EventType.PEER_LEAVE, {"peer_id": peer_id})
+            removed_share_ids = share_registry.remove_by_peer(peer_id)
+            for share_id in removed_share_ids:
+                await self.broadcast(EventType.FOLDER_UNSHARE, {"share_id": share_id})
             logger.info("Peer unregistered: %s", peer_id)
 
     async def send(self, peer_id: str, event_type: EventType, payload: dict) -> bool:
@@ -112,6 +116,31 @@ class PeerRegistry:
             receiver_id = event.payload.get("receiver_id") or event.payload.get("sender_id")
             if isinstance(receiver_id, str):
                 await self.send(receiver_id, event.event_type, event.payload)
+            return
+
+        if event.event_type == EventType.FOLDER_SHARE:
+            try:
+                record = SharedFolderRecord(**event.payload)
+                share_registry.add(record)
+                await self.broadcast(EventType.FOLDER_SHARE, record.model_dump(mode="json"), exclude_peer_id=sender_id)
+            except ValidationError as exc:
+                await self.send(sender_id, EventType.ERROR, {"message": "Invalid folder share payload", "details": exc.errors()})
+            return
+
+        if event.event_type == EventType.FOLDER_UNSHARE:
+            share_id = event.payload.get("share_id")
+            if isinstance(share_id, str):
+                share_registry.remove(share_id)
+                await self.broadcast(EventType.FOLDER_UNSHARE, {"share_id": share_id}, exclude_peer_id=sender_id)
+            return
+
+        if event.event_type in {EventType.SHARE_FILE_REQUEST, EventType.SHARE_FILE_READY, EventType.SHARE_FILE_ERROR}:
+            recipient_id = event.payload.get("recipient_id") or event.payload.get("receiver_id")
+            if isinstance(recipient_id, str):
+                event.payload["sender_id"] = sender_id
+                delivered = await self.send(recipient_id, event.event_type, event.payload)
+                if not delivered:
+                    await self.send(sender_id, EventType.ERROR, {"message": "Recipient is not connected"})
             return
 
         await self.send(sender_id, EventType.ERROR, {"message": f"Unsupported event type: {event.event_type}"})

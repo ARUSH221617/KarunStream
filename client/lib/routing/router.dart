@@ -99,12 +99,11 @@ final routerProvider = Provider<GoRouter>((ref) {
           location == Routes.register ||
           location == Routes.otp;
 
-      if (!isLoggedIn && !isPublicRoute) {
+      if (!isLoggedIn && !isGuest && !isPublicRoute) {
         return Routes.welcome;
       }
 
-      if (isLoggedIn &&
-          !isGuest &&
+      if ((isLoggedIn || isGuest) &&
           (location == Routes.login ||
               location == Routes.welcome ||
               location == Routes.splash)) {

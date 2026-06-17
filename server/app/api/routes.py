@@ -11,6 +11,7 @@ from app.core.security import safe_upload_path
 from app.models import FileTransferRecord
 from app.services.files import file_registry
 from app.services.sockets import registry
+from app.services.shares import share_registry
 
 router = APIRouter(prefix="/api/v1")
 
@@ -29,6 +30,11 @@ async def system_status() -> dict:
 @router.get("/peers")
 async def peers() -> dict:
     return {"peers": [peer.model_dump(mode="json") for peer in registry.list_peers()]}
+
+
+@router.get("/shares")
+async def list_shares() -> dict:
+    return {"shares": [share.model_dump(mode="json") for share in share_registry.list_shares()]}
 
 
 @router.post("/files/upload", status_code=status.HTTP_201_CREATED)

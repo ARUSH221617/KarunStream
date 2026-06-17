@@ -77,5 +77,14 @@
   "noRecentTransfers": "No recent transfers found.",
   "lanSharing": "LAN Sharing",
   "lanSharingDesc": "High-speed local file transfers.",
-  "profile": "Profile"
+  "profile": "Profile",
+  "filesTab": "Files",
+  "foldersTab": "Folders",
+  "shareFolder": "Share Folder",
+  "unshare": "Unshare",
+  "noSharedFolders": "No Shared Folders",
+  "foldersSubtitle": "Browse and download folders shared in real-time by active peers.",
+  "filesInFolder": "Files in Folder",
+  "sharing": "Sharing",
+  "localFolder": "Local Folder"
 }

@@ -21,6 +21,11 @@ class EventType(StrEnum):
     FILE_DELETED = "FILE_DELETED"
     HEARTBEAT = "HEARTBEAT"
     ERROR = "ERROR"
+    FOLDER_SHARE = "FOLDER_SHARE"
+    FOLDER_UNSHARE = "FOLDER_UNSHARE"
+    SHARE_FILE_REQUEST = "SHARE_FILE_REQUEST"
+    SHARE_FILE_READY = "SHARE_FILE_READY"
+    SHARE_FILE_ERROR = "SHARE_FILE_ERROR"
 
 
 class PeerRegistration(BaseModel):
@@ -79,3 +84,18 @@ class FileTransferRecord(BaseModel):
 class WebSocketEvent(BaseModel):
     event_type: EventType
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class SharedFolderFile(BaseModel):
+    relative_path: str
+    file_name: str
+    file_size: int = Field(ge=0)
+
+
+class SharedFolderRecord(BaseModel):
+    share_id: str
+    peer_id: str
+    peer_nickname: str
+    name: str
+    files: list[SharedFolderFile] = Field(default_factory=list)
+

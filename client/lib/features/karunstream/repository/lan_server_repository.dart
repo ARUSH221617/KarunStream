@@ -12,6 +12,7 @@ import '../model/file_transfer.dart';
 import '../model/karun_event.dart';
 import '../model/karun_peer.dart';
 import '../model/server_status.dart';
+import '../model/shared_folder.dart';
 
 class LanServerRepository {
   LanServerRepository({
@@ -106,6 +107,20 @@ class LanServerRepository {
       savePath,
       onReceiveProgress: onReceiveProgress,
     );
+  }
+
+  Future<List<SharedFolder>> fetchShares(Uri serverUri) async {
+    final response = await _dio.getUri<Map<String, dynamic>>(
+      serverUri.replace(path: '/api/v1/shares'),
+    );
+    final shares = response.data?['shares'] as List? ?? const [];
+    return shares
+        .map(
+          (share) => SharedFolder.fromJson(
+            Map<String, dynamic>.from(share as Map),
+          ),
+        )
+        .toList();
   }
 
   Future<void> deleteFile({
