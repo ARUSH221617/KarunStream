@@ -1,8 +1,12 @@
 import 'dart:developer' as developer;
+import 'dart:io';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'environment/env.dart';
@@ -14,6 +18,12 @@ SupabaseClient get supabase => Supabase.instance.client;
 void main() async {
   developer.log('Starting main()...');
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   developer.log('WidgetsFlutterBinding initialized.');
 
   try {
