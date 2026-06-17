@@ -5,8 +5,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../theme/app_colors.dart';
 import '../model/file_transfer.dart';
 import '../state/lan_workspace_controller.dart';
+import '../widgets/karun_empty_state.dart';
 
 class FilesScreen extends ConsumerWidget {
   const FilesScreen({super.key});
@@ -15,66 +17,75 @@ class FilesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(lanWorkspaceProvider);
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.folder_copy_outlined),
-                  const SizedBox(width: 8),
-                  Text(
-                    'LAN Files',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: 'Refresh files',
-                    onPressed: state.serverUri == null
-                        ? null
-                        : ref.read(lanWorkspaceProvider.notifier).refreshFiles,
-                    icon: const Icon(Icons.refresh),
-                  ),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.folder_copy_outlined),
+                    const SizedBox(width: 8),
+                    Text(
+                      'LAN Files',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Refresh files',
+                      onPressed: state.serverUri == null
+                          ? null
+                          : ref.read(lanWorkspaceProvider.notifier).refreshFiles,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Upload files to the local server and announce them to peers without cloud storage.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                if (state.isTransferring) ...[
+                  LinearProgressIndicator(value: state.transferProgress),
+                  const SizedBox(height: 12),
                 ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Upload files to the local server and announce them to peers without cloud storage.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 16),
-              if (state.isTransferring) ...[
-                LinearProgressIndicator(value: state.transferProgress),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: state.files.isEmpty
+                      ? const KarunEmptyState(
+                          icon: Icons.folder_open_outlined,
+                          title: 'No Shared Files',
+                          subtitle: 'Upload files to share them instantly with active devices on your local network.',
+                        )
+                      : ListView(
+                          children: [
+                            for (final file in state.files)
+                              _FileTransferTile(file: file),
+                          ],
+                        ),
+                ),
               ],
-              FilledButton.icon(
-                onPressed: state.isConnected && !state.isTransferring
-                    ? () => _pickAndUpload(ref)
-                    : null,
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Share local media'),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: state.files.isEmpty
-                    ? const Center(child: Text('Shared files will appear here.'))
-                    : ListView(
-                        children: [
-                          for (final file in state.files)
-                            _FileTransferTile(file: file),
-                        ],
-                      ),
-              ),
-            ],
+            ),
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: state.isConnected && !state.isTransferring
+            ? () => _pickAndUpload(ref)
+            : null,
+        tooltip: 'Share local media',
+        backgroundColor: AppColors.orange,
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 // import 'sign_in_with_apple.dart';
@@ -10,7 +11,7 @@ class SocialSignIn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isIOS = Platform.isIOS;
+    final isIOS = !kIsWeb && Platform.isIOS;
     return Row(
       children: [
         Expanded(

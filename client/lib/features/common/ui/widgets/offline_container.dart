@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,7 +39,7 @@ class _OfflineContainerState extends ConsumerState<OfflineContainer> {
   }
 
   void _updateConnectionStatus(List<ConnectivityResult> result) {
-    if (Platform.isIOS) return;
+    if (!kIsWeb && Platform.isIOS) return;
 
     setState(() {
       _isOffline = result.contains(ConnectivityResult.none);

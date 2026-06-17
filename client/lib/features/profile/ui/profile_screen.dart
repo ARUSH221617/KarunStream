@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -170,7 +171,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             icon: HugeIcons.strokeRoundedStar,
             text: LocaleKeys.rateUs.tr(),
             onTap: () => context.tryLaunchUrl(
-                Platform.isIOS ? Constants.appStore : Constants.playStore),
+                (!kIsWeb && Platform.isIOS) ? Constants.appStore : Constants.playStore),
           ),
           ProfileItem(
             icon: HugeIcons.strokeRoundedSettingError04,

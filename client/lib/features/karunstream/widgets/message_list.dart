@@ -9,6 +9,7 @@ import '../model/chat_message.dart';
 import '../model/file_offer.dart';
 import '../state/lan_workspace_controller.dart';
 import '../../../theme/app_theme.dart';
+import 'karun_empty_state.dart';
 
 class MessageList extends ConsumerWidget {
   const MessageList({super.key});
@@ -18,8 +19,10 @@ class MessageList extends ConsumerWidget {
     final state = ref.watch(lanWorkspaceProvider);
 
     if (state.messages.isEmpty) {
-      return const Center(
-        child: Text('Lobby messages will appear here.'),
+      return const KarunEmptyState(
+        icon: Icons.forum_outlined,
+        title: 'No Messages Yet',
+        subtitle: 'Start the conversation! Messages sent here are only visible to devices on your local network.',
       );
     }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/lan_workspace_controller.dart';
+import 'karun_empty_state.dart';
 
 class PeerRoster extends ConsumerWidget {
   const PeerRoster({super.key});
@@ -35,7 +36,11 @@ class PeerRoster extends ConsumerWidget {
             const SizedBox(height: 12),
             Expanded(
               child: state.peers.isEmpty
-                  ? const Center(child: Text('No peers connected yet.'))
+                  ? const KarunEmptyState(
+                      icon: Icons.devices_other_outlined,
+                      title: 'Looking for Peers',
+                      subtitle: 'No other devices discovered on this subnet yet. Make sure KarunStream is running on them.',
+                    )
                   : ListView.separated(
                       itemCount: state.peers.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
