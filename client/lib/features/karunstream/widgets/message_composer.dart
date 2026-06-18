@@ -18,7 +18,9 @@ class MessageComposer extends ConsumerStatefulWidget {
 
 class _MessageComposerState extends ConsumerState<MessageComposer> {
   final _controller = TextEditingController();
+  final _focusNode = FocusNode();
   bool _isTextEmpty = true;
+  bool _isHovered = false;
   final List<XFile> _pendingFiles = [];
   List<FileOffer> _editingAttachedFiles = [];
 
@@ -26,6 +28,11 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   void initState() {
     super.initState();
     _controller.addListener(_handleTextChange);
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  void _handleFocusChange() {
+    setState(() {});
   }
 
   void _handleTextChange() {
@@ -41,6 +48,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   void dispose() {
     _controller.removeListener(_handleTextChange);
     _controller.dispose();
+    _focusNode.removeListener(_handleFocusChange);
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -82,7 +91,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
             newFiles: _pendingFiles,
             onRemoveExisting: (index) =>
                 setState(() => _editingAttachedFiles.removeAt(index)),
-            onRemoveNew: (index) => setState(() => _pendingFiles.removeAt(index)),
+            onRemoveNew: (index) =>
+                setState(() => _pendingFiles.removeAt(index)),
             onDeleteExisting: (index) {
               final offer = _editingAttachedFiles[index];
               notifier.deleteUploadedFile(offer.transferId);
@@ -91,95 +101,114 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: _GlassContainer(
-            borderRadius: BorderRadius.circular(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (state.editingMessage != null)
-                  _EditMessageBanner(
-                    message: state.editingMessage!,
-                    onCancel: () => ref
-                        .read(lanWorkspaceProvider.notifier)
-                        .cancelEditing(),
-                  ),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+          child: MouseRegion(
+            onEnter: (_) => setState(() => _isHovered = true),
+            onExit: (_) => setState(() => _isHovered = false),
+            child: GestureDetector(
+              onTap: () {
+                if (!_focusNode.hasFocus) {
+                  _focusNode.requestFocus();
+                }
+              },
+              child: _GlassContainer(
+                isHovered: _isHovered,
+                isFocused: _focusNode.hasFocus,
+                borderRadius: BorderRadius.circular(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Attachment Button
-                    Padding(
-                      padding: const EdgeInsets.only(left: 6.0, bottom: 6.0),
-                      child: IconButton(
-                        tooltip: 'Share file',
-                        onPressed: canAttach ? _attachFile : null,
-                        icon: state.isTransferring
-                            ? SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: theme.colorScheme.primary,
-                                ),
-                              )
-                            : Icon(
-                                Icons.add_circle_outline_rounded,
-                                color: canAttach ? null : theme.disabledColor,
-                              ),
+                    if (state.editingMessage != null)
+                      _EditMessageBanner(
+                        message: state.editingMessage!,
+                        onCancel: () => ref
+                            .read(lanWorkspaceProvider.notifier)
+                            .cancelEditing(),
                       ),
-                    ),
-
-                    // Text Field
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: TextField(
-                          controller: _controller,
-                          enabled: state.isConnected,
-                          minLines: 1,
-                          maxLines: 5,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          style: theme.textTheme.bodyLarge,
-                          decoration: InputDecoration(
-                            hintText: 'Message',
-                            fillColor: Colors.transparent,
-                            border: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            contentPadding:
-                                const EdgeInsets.symmetric(vertical: 16.0),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        // Attachment Button
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6.0),
+                          child: IconButton(
+                            tooltip: 'Share file',
+                            onPressed: canAttach ? _attachFile : null,
+                            icon: state.isTransferring
+                                ? SizedBox.square(
+                                    dimension: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.add_circle_outline_rounded,
+                                    color:
+                                        canAttach ? null : theme.disabledColor,
+                                  ),
                           ),
                         ),
-                      ),
-                    ),
 
-                    // Send Button
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6.0, bottom: 6.0),
-                      child: IconButton.filled(
-                        onPressed: canSend ? _send : null,
-                        style: IconButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: theme.colorScheme.onPrimary,
-                          disabledBackgroundColor: theme
-                              .colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                          disabledForegroundColor: theme
-                              .colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.4),
-                          minimumSize: const Size(48, 48),
+                        // Text Field
+                        Expanded(
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: TextField(
+                              controller: _controller,
+                              focusNode: _focusNode,
+                              enabled: state.isConnected,
+                              minLines: 1,
+                              maxLines: 5,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                              style: theme.textTheme.bodyLarge,
+                              decoration: InputDecoration(
+                                hintText: 'Message',
+                                filled: false,
+                                fillColor: Colors.transparent,
+                                hoverColor: Colors.transparent,
+                                focusColor: Colors.transparent,
+                                border: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                disabledBorder: InputBorder.none,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(vertical: 16.0),
+                              ),
+                            ),
+                          ),
                         ),
-                        icon: Icon(
-                          state.editingMessage != null
-                              ? Icons.check_rounded
-                              : Icons.send_rounded,
-                          size: 22,
+
+                        // Send Button
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6.0),
+                          child: IconButton.filled(
+                            onPressed: canSend ? _send : null,
+                            style: IconButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: theme.colorScheme.onPrimary,
+                              disabledBackgroundColor: theme
+                                  .colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.3),
+                              disabledForegroundColor: theme
+                                  .colorScheme.onSurfaceVariant
+                                  .withValues(alpha: 0.4),
+                              minimumSize: const Size(48, 48),
+                            ),
+                            icon: Icon(
+                              state.editingMessage != null
+                                  ? Icons.check_rounded
+                                  : Icons.send_rounded,
+                              size: 22,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -200,7 +229,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
           final offer = await notifier.uploadFileOnly(
             fileName: file.name,
             filePath: kIsWeb || file.path.isEmpty ? null : file.path,
-            bytes: kIsWeb || file.path.isEmpty ? await file.readAsBytes() : null,
+            bytes:
+                kIsWeb || file.path.isEmpty ? await file.readAsBytes() : null,
           );
           if (offer != null) {
             allOffers.add(offer);
@@ -259,10 +289,14 @@ class _GlassContainer extends StatelessWidget {
   const _GlassContainer({
     required this.child,
     this.borderRadius,
+    this.isHovered = false,
+    this.isFocused = false,
   });
 
   final Widget child;
   final BorderRadius? borderRadius;
+  final bool isHovered;
+  final bool isFocused;
 
   @override
   Widget build(BuildContext context) {
@@ -273,20 +307,27 @@ class _GlassContainer extends StatelessWidget {
       borderRadius: borderRadius ?? BorderRadius.circular(24),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
           decoration: BoxDecoration(
-            color:
-                (isDark ? Colors.black : Colors.white).withValues(alpha: 0.1),
+            color: (isDark ? Colors.black : Colors.white).withValues(
+              alpha: isFocused ? 0.15 : (isHovered ? 0.13 : 0.08),
+            ),
             borderRadius: borderRadius ?? BorderRadius.circular(24),
             border: Border.all(
-              color:
-                  (isDark ? Colors.white : Colors.black).withValues(alpha: 0.1),
+              color: isFocused
+                  ? theme.colorScheme.primary.withValues(alpha: 0.6)
+                  : (isDark ? Colors.white : Colors.black).withValues(
+                      alpha: isHovered ? 0.2 : 0.1,
+                    ),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
+                color: (isFocused ? theme.colorScheme.primary : Colors.black)
+                    .withValues(alpha: isFocused ? 0.12 : 0.05),
+                blurRadius: isFocused ? 14 : 10,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -429,7 +470,9 @@ class _FilePreviewItem extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isExisting ? Icons.cloud_done_outlined : Icons.insert_drive_file_outlined,
+            isExisting
+                ? Icons.cloud_done_outlined
+                : Icons.insert_drive_file_outlined,
             size: 20,
             color: isExisting ? theme.colorScheme.primary : null,
           ),
@@ -447,7 +490,8 @@ class _FilePreviewItem extends StatelessWidget {
           if (isExisting && onDelete != null)
             IconButton(
               onPressed: () => _showDeleteDialog(context),
-              icon: const Icon(Icons.delete_forever_outlined, size: 18, color: Colors.red),
+              icon: const Icon(Icons.delete_forever_outlined,
+                  size: 18, color: Colors.red),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
               visualDensity: VisualDensity.compact,
@@ -471,7 +515,8 @@ class _FilePreviewItem extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete from Server?'),
-        content: const Text('This will permanently delete the file from the server for everyone.'),
+        content: const Text(
+            'This will permanently delete the file from the server for everyone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
