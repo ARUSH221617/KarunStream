@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../constants/constants.dart';
+import '../../../main.dart';
 import '../../../routing/routes.dart';
 import '../../authentication/ui/view_model/authentication_view_model.dart';
 import '../../common/ui/widgets/loading.dart';
@@ -33,8 +34,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   Future<void> _checkLoginStatus() async {
-    final isLoggedIn =
-        await ref.read(authenticationViewModelProvider.notifier).isLogin();
+    // Wait for Supabase to finish restoring the persisted session
+    final authState = await supabase.auth.onAuthStateChange.first;
+    final isLoggedIn = authState.session != null;
     final isGuestMode =
         await ref.read(authenticationViewModelProvider.notifier).isGuestMode();
     debugPrint(
