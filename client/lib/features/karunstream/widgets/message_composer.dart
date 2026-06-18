@@ -21,6 +21,7 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   final _focusNode = FocusNode();
   bool _isTextEmpty = true;
   bool _isHovered = false;
+  bool _isPickingFile = false;
   final List<XFile> _pendingFiles = [];
   List<FileOffer> _editingAttachedFiles = [];
 
@@ -275,13 +276,20 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   }
 
   Future<void> _attachFile() async {
-    final picker = ImagePicker();
-    final pickedFiles = await picker.pickMultipleMedia();
-    if (pickedFiles.isEmpty) return;
-
-    setState(() {
-      _pendingFiles.addAll(pickedFiles);
-    });
+    if (_isPickingFile) return;
+    setState(() => _isPickingFile = true);
+    try {
+      final picker = ImagePicker();
+      final pickedFiles = await picker.pickMultipleMedia();
+      if (pickedFiles.isNotEmpty) {
+        setState(() => _pendingFiles.addAll(pickedFiles));
+      }
+    } catch (e) {
+      // Swallow already_active and other picker errors gracefully.
+      debugPrint('[MessageComposer] _attachFile error: $e');
+    } finally {
+      if (mounted) setState(() => _isPickingFile = false);
+    }
   }
 }
 
