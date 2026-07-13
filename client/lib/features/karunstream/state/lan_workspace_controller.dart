@@ -22,6 +22,7 @@ import '../repository/lan_server_repository.dart';
 import '../../../constants/constants.dart';
 import '../../../utils/utils.dart';
 import '../../profile/ui/view_model/profile_view_model.dart';
+import '../../common/local/shared_preferences_provider.dart';
 
 final lanServerRepositoryProvider = Provider<LanServerRepository>((ref) {
   return LanServerRepository();
@@ -172,9 +173,27 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     final profileName = ref.watch(profileViewModelProvider
         .select((p) => p.value?.profile?.name ?? Constants.defaultName));
 
+    final prefs = ref.watch(sharedPreferencesProvider);
+
+    // Load or generate persistent peer ID to keep user identity consistent
+    String? persistentPeerId = prefs.getString('karunstream_peer_id');
+    if (persistentPeerId == null) {
+      persistentPeerId = const Uuid().v4();
+      prefs.setString('karunstream_peer_id', persistentPeerId);
+    }
+
+    // Load last connected server URI for automatic session restoration
+    final serverUriStr = prefs.getString('karunstream_server_uri');
+    final serverUri = serverUriStr != null ? Uri.tryParse(serverUriStr) : null;
+
+    if (serverUri != null) {
+      Future.microtask(() => connect(serverUri));
+    }
+
     return LanWorkspaceState(
-      peerId: const Uuid().v4(),
+      peerId: persistentPeerId,
       nickname: profileName,
+      serverUri: serverUri,
     );
   }
 
@@ -232,6 +251,10 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
             onDone: () => state = state.copyWith(isConnected: false),
           );
       _startHeartbeat();
+      
+      final prefs = ref.read(sharedPreferencesProvider);
+      await prefs.setString('karunstream_server_uri', serverUri.toString());
+
       state = state.copyWith(
         status: status,
         isConnecting: false,
@@ -255,6 +278,10 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     _heartbeatTimer?.cancel();
     _eventsSubscription?.cancel();
     _channel?.sink.close();
+    
+    final prefs = ref.read(sharedPreferencesProvider);
+    prefs.remove('karunstream_server_uri');
+
     state = state.copyWith(
       isConnected: false,
       isConnecting: false,
