@@ -258,14 +258,15 @@ async def get_conversation_messages(
                 "is_deleted": m.is_deleted,
                 "reply_to_msg_id": m.reply_to_msg_id,
                 "message_hash": m.message_hash,
-                "attachments": [
+                "file_offers": [
                     {
-                        "attachment_id": a.attachment_id,
+                        "transfer_id": a.file_record_id or a.attachment_id,
+                        "sender_id": m.sender_id,
+                        "receiver_id": m.conversation_id,
                         "file_name": a.file_name,
                         "file_size": a.file_size,
                         "sha256": a.sha256,
                         "download_url": a.download_url,
-                        "created_at": a.created_at,
                     }
                     for a in m.attachments
                 ],

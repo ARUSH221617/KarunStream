@@ -29,8 +29,9 @@ logger = logging.getLogger(__name__)
 class DatabaseService:
     """Service to handle persistence layer using SQLAlchemy async sessions."""
 
-    def __init__(self) -> None:
-        self.session_factory = get_session_factory()
+    @property
+    def session_factory(self):
+        return get_session_factory()
 
     async def upsert_user(
         self,

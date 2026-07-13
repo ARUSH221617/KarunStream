@@ -7,10 +7,12 @@ from app.db.engine import reset_engine_for_testing
 from app.db.tables import ConversationType, MemberRole
 
 
+import asyncio
+
 @pytest.fixture(autouse=True)
-async def setup_test_db():
+def setup_test_db():
     # Use a separate test SQLite DB in memory or file
-    await reset_engine_for_testing("sqlite+aiosqlite:///:memory:")
+    asyncio.run(reset_engine_for_testing("sqlite+aiosqlite:///:memory:"))
     registry._peers.clear()
     registry._connections.clear()
     yield
