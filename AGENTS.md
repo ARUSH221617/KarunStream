@@ -31,6 +31,23 @@ For Python, use 4-space indentation, type hints for public functions, `snake_cas
 
 Add tests with every behavioral change once code exists. Server tests should cover API contracts, WebSocket events, mDNS/discovery behavior where practical, file hash verification, filename sanitization, and resume/error handling. Flutter tests should cover state management, protocol serialization, and core UI flows. Name Python tests `test_*.py`; name Dart tests `*_test.dart`.
 
+## Advanced Development & Integration Guidelines
+
+### Python 3.13 Async SQLite & Windows Compatibility
+* Compiling the `greenlet` dependency from source fails on Windows under Python 3.13. Always pin `greenlet==3.5.3` (or use a compatible precompiled wheel version) when setting up asynchronous SQLite engines with SQLAlchemy.
+
+### Dynamic SQLAlchemy Session Factories in Services
+* Services instantiated at import-time (e.g., `db_service = DatabaseService()`) must resolve `session_factory` dynamically via a `@property` rather than caching it once during `__init__`. This allows test engines to override the global database URL dynamically (e.g., to run tests in a clean `sqlite+aiosqlite:///:memory:` database).
+
+### Test Isolation & Async Fixtures
+* When writing Python test suites that use `fastapi.testclient.TestClient` inside synchronous test functions, do not use `async def` fixtures. Instead, use synchronous fixtures and run async database resets/initializations synchronously using `asyncio.run(reset_engine_for_testing(...))`. This prevents the TestClient event loop from raising `CancelledError` during WebSocket lifecycle execution.
+
+### Client-Server Model Alignment
+* Always verify that property keys of serialized attachments or file offers (e.g., `'file_offers'` vs `'attachments'`) are identically named and mapped across the WebSocket event routing logic and the HTTP REST history endpoints. This prevents media/attachments from disappearing from lists when reloading or reopening threads.
+
+### Client Session Persistence
+* Save client peer identity (`peerId`) and the last connected server URI in `SharedPreferences` to ensure they persist across app restarts, reloads, or web browser refreshes. Schedule a background microtask connection to auto-restore sessions seamlessly on startup.
+
 ## Commit & Pull Request Guidelines
 
 There is no established Git history yet, so use concise Conventional Commit-style messages, such as `feat: add websocket peer registry` or `fix: sanitize upload filenames`. Pull requests should include a short summary, testing performed, linked issue or requirement, and screenshots/GIFs for UI changes. Call out network, security, or Docker configuration changes clearly.
