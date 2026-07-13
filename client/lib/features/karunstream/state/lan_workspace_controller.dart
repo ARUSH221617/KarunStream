@@ -17,6 +17,7 @@ import '../model/karun_event.dart';
 import '../model/karun_peer.dart';
 import '../model/server_status.dart';
 import '../model/shared_folder.dart';
+import '../model/conversation.dart';
 import '../repository/lan_server_repository.dart';
 import '../../../constants/constants.dart';
 import '../../../utils/utils.dart';
@@ -52,6 +53,10 @@ class LanWorkspaceState {
     this.error,
     this.sharedFolders = const [],
     this.localShares = const {},
+    this.conversations = const [],
+    this.activeConversationId,
+    this.isLoadingConversations = false,
+    this.isLoadingMessages = false,
   }) : _deletedFileIds = deletedFileIds;
 
   final String peerId;
@@ -73,6 +78,10 @@ class LanWorkspaceState {
   final String? error;
   final List<SharedFolder> sharedFolders;
   final Map<String, String> localShares;
+  final List<Conversation> conversations;
+  final String? activeConversationId;
+  final bool isLoadingConversations;
+  final bool isLoadingMessages;
 
   Set<String> get deletedFileIds => _deletedFileIds ?? const {};
 
@@ -95,8 +104,13 @@ class LanWorkspaceState {
     String? error,
     List<SharedFolder>? sharedFolders,
     Map<String, String>? localShares,
+    List<Conversation>? conversations,
+    String? activeConversationId,
+    bool? isLoadingConversations,
+    bool? isLoadingMessages,
     bool clearError = false,
     bool clearEditingMessage = false,
+    bool clearActiveConversation = false,
   }) {
     return LanWorkspaceState(
       peerId: peerId,
@@ -118,6 +132,10 @@ class LanWorkspaceState {
       error: clearError ? null : error ?? this.error,
       sharedFolders: sharedFolders ?? this.sharedFolders,
       localShares: localShares ?? this.localShares,
+      conversations: conversations ?? this.conversations,
+      activeConversationId: clearActiveConversation ? null : activeConversationId ?? this.activeConversationId,
+      isLoadingConversations: isLoadingConversations ?? this.isLoadingConversations,
+      isLoadingMessages: isLoadingMessages ?? this.isLoadingMessages,
     );
   }
 }
@@ -222,6 +240,8 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
       );
       refreshFiles();
       refreshShares();
+      fetchConversations();
+      selectConversation(null);
     } catch (error) {
       state = state.copyWith(
         isConnecting: false,
@@ -256,12 +276,115 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     final message = ChatMessage(
       messageId: const Uuid().v4(),
       senderId: state.peerId,
-      receiverId: 'global',
+      receiverId: state.activeConversationId ?? 'global',
       body: trimmedBody,
       timestamp: DateTime.now(),
       fileOffers: fileOffers,
     );
     _sendEvent('CHAT_MESSAGE', message.toJson());
+
+    // Add locally for private chats, groups, and channels since the server doesn't echo them back to the sender
+    if (state.activeConversationId != null) {
+      state = state.copyWith(
+        messages: [
+          ...state.messages,
+          message,
+        ],
+      );
+    }
+  }
+
+  Future<void> fetchConversations() async {
+    final uri = state.serverUri;
+    if (uri == null || !state.isConnected) return;
+    state = state.copyWith(isLoadingConversations: true);
+    try {
+      final list = await _repository.fetchConversations(serverUri: uri, peerId: state.peerId);
+      state = state.copyWith(
+        conversations: list,
+        isLoadingConversations: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoadingConversations: false,
+        error: 'Failed to load conversations: $e',
+      );
+    }
+  }
+
+  Future<void> selectConversation(String? conversationId) async {
+    final uri = state.serverUri;
+    if (uri == null || !state.isConnected) return;
+
+    final targetId = conversationId ?? 'global';
+
+    state = state.copyWith(
+      activeConversationId: conversationId,
+      isLoadingMessages: true,
+      clearActiveConversation: conversationId == null,
+    );
+
+    try {
+      final messagesList = await _repository.fetchConversationMessages(
+        serverUri: uri,
+        conversationId: targetId,
+      );
+      state = state.copyWith(
+        messages: messagesList,
+        isLoadingMessages: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoadingMessages: false,
+        error: 'Failed to load messages: $e',
+      );
+    }
+  }
+
+  Future<void> createConversation(
+    String type, {
+    String? title,
+    String? description,
+    required List<String> initialMembers,
+  }) async {
+    final uri = state.serverUri;
+    if (uri == null || !state.isConnected) return;
+
+    try {
+      final conv = await _repository.createConversation(
+        serverUri: uri,
+        peerId: state.peerId,
+        type: type,
+        title: title,
+        description: description,
+        initialMembers: initialMembers,
+      );
+      await fetchConversations();
+      await selectConversation(conv.conversationId);
+    } catch (e) {
+      state = state.copyWith(
+        error: 'Failed to create conversation: $e',
+      );
+    }
+  }
+
+  Future<void> addMemberToActiveConversation(String peerId) async {
+    final uri = state.serverUri;
+    final convId = state.activeConversationId;
+    if (uri == null || convId == null || !state.isConnected) return;
+
+    try {
+      await _repository.addConversationMember(
+        serverUri: uri,
+        conversationId: convId,
+        peerId: peerId,
+      );
+      await fetchConversations();
+    } catch (e) {
+      state = state.copyWith(
+        error: 'Failed to add member: $e',
+      );
+    }
   }
 
   void editChat(String messageId, String newBody, {List<FileOffer>? fileOffers}) {
@@ -285,6 +408,15 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     
     _sendEvent('CHAT_EDIT', updatedMessage.toJson());
     cancelEditing();
+
+    // Edit locally for private chats, groups, and channels
+    if (state.activeConversationId != null) {
+      state = state.copyWith(
+        messages: state.messages.map((m) {
+          return m.messageId == messageId ? updatedMessage : m;
+        }).toList(),
+      );
+    }
   }
 
   void startEditing(ChatMessage message) {
@@ -300,6 +432,10 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     if (state.editingMessage?.messageId == messageId) {
       cancelEditing();
     }
+    // Delete locally immediately for instant feedback
+    state = state.copyWith(
+      messages: state.messages.where((m) => m.messageId != messageId).toList(),
+    );
   }
 
   Future<FileOffer?> uploadFileOnly({
@@ -560,12 +696,21 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
         break;
       case 'CHAT_MESSAGE':
         final message = ChatMessage.fromJson(event.payload);
-        state = state.copyWith(
-          messages: [
-            ...state.messages,
-            message,
-          ],
-        );
+        final eventConvId = event.payload['conversation_id'] as String? ?? message.receiverId;
+        fetchConversations();
+        
+        final currentActiveId = state.activeConversationId ?? 'global';
+        final messageBelongsToActive = eventConvId == currentActiveId || 
+            (currentActiveId == 'global' && message.receiverId == 'global');
+            
+        if (messageBelongsToActive) {
+          state = state.copyWith(
+            messages: [
+              ...state.messages,
+              message,
+            ],
+          );
+        }
         if (message.fileOffers.isNotEmpty) {
           refreshFiles();
         }

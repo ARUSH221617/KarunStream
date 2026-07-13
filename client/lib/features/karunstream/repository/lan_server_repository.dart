@@ -13,6 +13,8 @@ import '../model/karun_event.dart';
 import '../model/karun_peer.dart';
 import '../model/server_status.dart';
 import '../model/shared_folder.dart';
+import '../model/conversation.dart';
+import '../model/chat_message.dart';
 
 class LanServerRepository {
   LanServerRepository({
@@ -23,6 +25,89 @@ class LanServerRepository {
 
   final Dio _dio;
   final WebSocketConnector _socketConnector;
+
+  Future<Conversation> createConversation({
+    required Uri serverUri,
+    required String peerId,
+    required String type, // 'private', 'group', 'channel'
+    String? title,
+    String? description,
+    required List<String> initialMembers,
+  }) async {
+    final response = await _dio.postUri<Map<String, dynamic>>(
+      serverUri.replace(path: '/api/v1/conversations'),
+      data: {
+        'conversation_type': type,
+        'title': title,
+        'description': description,
+        'initial_members': initialMembers,
+      },
+      options: Options(headers: {'X-Peer-ID': peerId}),
+    );
+    return Conversation.fromJson(response.data ?? {});
+  }
+
+  Future<List<Conversation>> fetchConversations({
+    required Uri serverUri,
+    required String peerId,
+  }) async {
+    final response = await _dio.getUri<Map<String, dynamic>>(
+      serverUri.replace(path: '/api/v1/conversations'),
+      options: Options(headers: {'X-Peer-ID': peerId}),
+    );
+    final list = response.data?['conversations'] as List? ?? const [];
+    return list
+        .map((c) => Conversation.fromJson(Map<String, dynamic>.from(c as Map)))
+        .toList();
+  }
+
+  Future<List<ChatMessage>> fetchConversationMessages({
+    required Uri serverUri,
+    required String conversationId,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final response = await _dio.getUri<Map<String, dynamic>>(
+      serverUri.replace(
+        path: '/api/v1/conversations/$conversationId/messages',
+        queryParameters: {
+          'limit': limit.toString(),
+          'offset': offset.toString(),
+        },
+      ),
+    );
+    final list = response.data?['messages'] as List? ?? const [];
+    return list
+        .map((m) => ChatMessage.fromJson(Map<String, dynamic>.from(m as Map)))
+        .toList();
+  }
+
+  Future<void> addConversationMember({
+    required Uri serverUri,
+    required String conversationId,
+    required String peerId,
+    String role = 'member',
+  }) async {
+    await _dio.postUri<dynamic>(
+      serverUri.replace(path: '/api/v1/conversations/$conversationId/members'),
+      data: {
+        'peer_id': peerId,
+        'role': role,
+      },
+    );
+  }
+
+  Future<void> removeConversationMember({
+    required Uri serverUri,
+    required String conversationId,
+    required String peerId,
+  }) async {
+    await _dio.deleteUri<dynamic>(
+      serverUri.replace(
+        path: '/api/v1/conversations/$conversationId/members/$peerId',
+      ),
+    );
+  }
 
   Future<ServerStatus> fetchStatus(Uri serverUri) async {
     final response = await _dio.getUri<Map<String, dynamic>>(

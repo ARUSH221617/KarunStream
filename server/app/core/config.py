@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     server_name: str = "KarunStream LAN"
     service_type: str = "_karunstream._tcp.local."
     upload_dir: Path = Path("/tmp/karunstream/uploads")
+    db_path: Path = Path("/tmp/karunstream/karunstream.db")
     max_upload_bytes: int = 10 * 1024 * 1024 * 1024
     chunk_size: int = 1024 * 1024
     log_dir: Path = Path("/tmp/karunstream/logs")
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     settings = Settings()
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.db_path.parent.mkdir(parents=True, exist_ok=True)
     settings.log_dir.mkdir(parents=True, exist_ok=True)
     settings.tls_dir.mkdir(parents=True, exist_ok=True)
     return settings

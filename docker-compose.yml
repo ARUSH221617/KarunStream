@@ -11,6 +11,7 @@ services:
       # so other devices can find the server inside Docker.
       KARUNSTREAM_ADVERTISED_IP: "" 
       KARUNSTREAM_UPLOAD_DIR: /data/uploads
+      KARUNSTREAM_DB_PATH: /data/karunstream.db
       KARUNSTREAM_LOG_DIR: /data/logs
       KARUNSTREAM_ENABLE_MDNS: "true"
     ports:

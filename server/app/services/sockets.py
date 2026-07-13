@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from app.models import ChatPayload, EventType, FileOfferPayload, Peer, PeerRegistration, WebSocketEvent, SharedFolderRecord
 from app.services.shares import share_registry
+from app.services.db_service import db_service
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,16 @@ class PeerRegistry:
         )
         self._peers[peer.peer_id] = peer
         self._connections[peer.peer_id] = websocket
+
+        # Persist user in SQLite
+        await db_service.upsert_user(
+            peer_id=peer.peer_id,
+            nickname=peer.nickname,
+            platform=peer.platform,
+            avatar_index=peer.avatar_index,
+            last_ip=client_host,
+        )
+
         await self.broadcast(EventType.PEER_JOIN, peer.model_dump(), exclude_peer_id=peer.peer_id)
         await self.send(peer.peer_id, EventType.PEER_LIST, {"peers": [item.model_dump() for item in self.list_peers()]})
         logger.info("Peer registered: %s (%s)", peer.peer_id, peer.nickname)
@@ -49,6 +60,8 @@ class PeerRegistry:
             for share_id in removed_share_ids:
                 await self.broadcast(EventType.FOLDER_UNSHARE, {"share_id": share_id})
             logger.info("Peer unregistered: %s", peer_id)
+            # Deactivate user in database
+            await db_service.deactivate_user(peer_id)
 
     async def send(self, peer_id: str, event_type: EventType, payload: dict) -> bool:
         websocket = self._connections.get(peer_id)
@@ -86,19 +99,144 @@ class PeerRegistry:
             await self.send(sender_id, EventType.HEARTBEAT, {"timestamp": time()})
             return
 
-        if event.event_type in {EventType.CHAT_MESSAGE, EventType.CHAT_EDIT}:
+        if event.event_type == EventType.CHAT_MESSAGE:
             payload = ChatPayload(**event.payload)
+            # Make sure sender exists in DB
+            sender_peer = self._peers.get(sender_id)
+            if sender_peer:
+                await db_service.upsert_user(
+                    peer_id=sender_peer.peer_id,
+                    nickname=sender_peer.nickname,
+                    platform=sender_peer.platform,
+                    avatar_index=sender_peer.avatar_index,
+                )
+
+            # Resolve conversation
+            if payload.receiver_id == "global":
+                conv_id = "global"
+                conv = await db_service.get_conversation(conv_id)
+                if not conv:
+                    # Create special global channel
+                    from app.db.tables import ConversationType
+                    conv = await db_service.create_group_or_channel(
+                        title="Global Chat",
+                        conversation_type=ConversationType.CHANNEL,
+                        creator_id=sender_id,
+                    )
+                    # Force conv ID to be 'global' in DB
+                    async with db_service.session_factory() as session:
+                        async with session.begin():
+                            from sqlalchemy import update
+                            from app.db.tables import ConversationRow
+                            stmt = update(ConversationRow).where(ConversationRow.id == conv.id).values(conversation_id="global")
+                            await session.execute(stmt)
+                    conv_id = "global"
+            else:
+                # Check if receiver_id is an existing conversation (e.g. group or channel)
+                conv = await db_service.get_conversation(payload.receiver_id)
+                if conv:
+                    conv_id = conv.conversation_id
+                else:
+                    # Upsert receiver to ensure foreign key constraint passes
+                    receiver_peer = self._peers.get(payload.receiver_id)
+                    if receiver_peer:
+                        await db_service.upsert_user(
+                            peer_id=receiver_peer.peer_id,
+                            nickname=receiver_peer.nickname,
+                            platform=receiver_peer.platform,
+                            avatar_index=receiver_peer.avatar_index,
+                        )
+                    else:
+                        # If receiver is not currently online/connected, we still create user in DB if they don't exist
+                        await db_service.upsert_user(
+                            peer_id=payload.receiver_id,
+                            nickname="Anonymous",
+                            platform="unknown",
+                        )
+                    # Get or create private DM
+                    conv = await db_service.get_or_create_private_conversation(sender_id, payload.receiver_id)
+                    conv_id = conv.conversation_id
+
+            # Save message attachments if any
+            attachments = []
+            for offer in payload.file_offers:
+                # Look up file path in DB by transfer_id
+                stored_path = None
+                download_url = None
+                db_rec = await db_service.get_file_record(offer.transfer_id)
+                if db_rec:
+                    stored_path = db_rec.stored_path
+                    download_url = db_rec.download_url
+                attachments.append({
+                    "file_record_id": offer.transfer_id,
+                    "file_name": offer.file_name,
+                    "file_size": offer.file_size,
+                    "sha256": offer.sha256,
+                    "stored_path": stored_path,
+                    "download_url": download_url or offer.download_url,
+                })
+
+            # Save message & compute integrity hash
+            saved_msg = await db_service.save_message(
+                msg_id=payload.msg_id,
+                sender_id=payload.sender_id,
+                conversation_id=conv_id,
+                body=payload.body,
+                message_type=payload.message_type,
+                timestamp=payload.timestamp,
+                attachments=attachments,
+            )
+
+            # Update payload/outgoing message with hash & conversation info
             outgoing = payload.model_dump(mode="json")
+            outgoing["message_hash"] = saved_msg.message_hash
+            outgoing["conversation_id"] = conv_id
+
+            # Route/Deliver message
             if payload.receiver_id == "global":
                 await self.broadcast(event.event_type, outgoing)
+            elif conv and conv.conversation_type in {"group", "channel"}:
+                # Broadcast to group/channel members
+                members = await db_service.get_conversation_members(conv_id)
+                for m in members:
+                    if m.peer_id != sender_id:
+                        await self.send(m.peer_id, event.event_type, outgoing)
             else:
                 delivered = await self.send(payload.receiver_id, event.event_type, outgoing)
                 if not delivered:
                     await self.send(sender_id, EventType.ERROR, {"message": "Recipient is not connected"})
             return
 
+        if event.event_type == EventType.CHAT_EDIT:
+            payload = ChatPayload(**event.payload)
+            edited_msg = await db_service.edit_message(
+                msg_id=payload.msg_id,
+                sender_id=payload.sender_id,
+                new_body=payload.body,
+            )
+            if edited_msg:
+                outgoing = payload.model_dump(mode="json")
+                outgoing["message_hash"] = edited_msg.message_hash
+                outgoing["conversation_id"] = edited_msg.conversation_id
+                if payload.receiver_id == "global":
+                    await self.broadcast(event.event_type, outgoing)
+                else:
+                    # If edited message was a group/channel conversation
+                    conv = await db_service.get_conversation(edited_msg.conversation_id)
+                    if conv and conv.conversation_type in {"group", "channel"}:
+                        members = await db_service.get_conversation_members(edited_msg.conversation_id)
+                        for m in members:
+                            if m.peer_id != sender_id:
+                                await self.send(m.peer_id, event.event_type, outgoing)
+                    else:
+                        await self.send(payload.receiver_id, event.event_type, outgoing)
+            return
+
         if event.event_type == EventType.CHAT_DELETE:
-            await self.broadcast(EventType.CHAT_DELETE, event.payload)
+            msg_id = event.payload.get("msg_id")
+            if isinstance(msg_id, str):
+                await db_service.delete_message(msg_id, sender_id)
+                await self.broadcast(EventType.CHAT_DELETE, event.payload)
             return
 
         if event.event_type == EventType.FILE_OFFER:

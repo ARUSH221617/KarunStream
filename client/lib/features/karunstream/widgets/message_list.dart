@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../../utils/utils.dart';
 import '../model/chat_message.dart';
 import '../model/file_offer.dart';
 import '../state/lan_workspace_controller.dart';
@@ -33,7 +34,7 @@ class MessageList extends ConsumerWidget {
       padding: const EdgeInsets.only(
         left: 16,
         right: 16,
-        top: 16,
+        top: 80,
         bottom: 90, // Space for the floating composer
       ),
       itemCount: state.messages.length,
@@ -319,8 +320,7 @@ class _ChatMessageBubbleState extends ConsumerState<_ChatMessageBubble>
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: GestureDetector(
           onLongPressStart: isMe
-              ? (details) =>
-                  _showContextMenu(context, details.globalPosition)
+              ? (details) => _showContextMenu(context, details.globalPosition)
               : null,
           child: ScaleTransition(
             scale: _scaleAnimation,
@@ -426,8 +426,10 @@ class _FileAttachment extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            isDeleted ? Icons.block_flipped : Icons.insert_drive_file_rounded,
-            color: isDeleted ? theme.colorScheme.error : foregroundColor,
+            isDeleted ? Icons.block_flipped : Utils.getFileIcon(offer.fileName),
+            color: isDeleted
+                ? theme.colorScheme.error
+                : Utils.getFileColor(offer.fileName),
           ),
           const SizedBox(width: 8),
           Flexible(

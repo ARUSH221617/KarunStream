@@ -99,3 +99,51 @@ class SharedFolderRecord(BaseModel):
     name: str
     files: list[SharedFolderFile] = Field(default_factory=list)
 
+
+class ConversationCreate(BaseModel):
+    title: str | None = None
+    conversation_type: Literal["private", "group", "channel"]
+    description: str | None = None
+    initial_members: list[str] = Field(default_factory=list)
+
+
+class ConversationResponse(BaseModel):
+    conversation_id: str
+    conversation_type: str
+    title: str | None
+    description: str | None
+    created_by: str | None
+    created_at: float
+    updated_at: float
+    is_archived: bool
+    members: list[str] = Field(default_factory=list)
+
+
+class MessageAttachmentResponse(BaseModel):
+    attachment_id: str
+    file_name: str
+    file_size: int
+    sha256: str
+    download_url: str | None
+    created_at: float
+
+
+class MessageResponse(BaseModel):
+    msg_id: str
+    conversation_id: str
+    sender_id: str
+    body: str
+    message_type: str
+    timestamp: float
+    is_edited: bool
+    is_deleted: bool
+    reply_to_msg_id: str | None = None
+    message_hash: str
+    attachments: list[MessageAttachmentResponse] = Field(default_factory=list)
+
+
+class ConversationMemberAdd(BaseModel):
+    peer_id: str
+    role: Literal["owner", "admin", "member"] = "member"
+
+

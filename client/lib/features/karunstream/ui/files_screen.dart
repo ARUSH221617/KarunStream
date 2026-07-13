@@ -51,8 +51,12 @@ class FilesScreen extends ConsumerWidget {
                         onPressed: state.serverUri == null
                             ? null
                             : () {
-                                ref.read(lanWorkspaceProvider.notifier).refreshFiles();
-                                ref.read(lanWorkspaceProvider.notifier).refreshShares();
+                                ref
+                                    .read(lanWorkspaceProvider.notifier)
+                                    .refreshFiles();
+                                ref
+                                    .read(lanWorkspaceProvider.notifier)
+                                    .refreshShares();
                               },
                         icon: const Icon(Icons.refresh),
                       ),
@@ -76,7 +80,9 @@ class FilesScreen extends ConsumerWidget {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(4),
                             child: LinearProgressIndicator(
-                              value: state.transferProgress > 0 ? state.transferProgress : null,
+                              value: state.transferProgress > 0
+                                  ? state.transferProgress
+                                  : null,
                             ),
                           ),
                         ),
@@ -138,7 +144,8 @@ class FilesScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               ListTile(
-                leading: const Icon(Icons.file_present_outlined, color: AppColors.orange),
+                leading: const Icon(Icons.file_present_outlined,
+                    color: AppColors.orange),
                 title: const Text('Share Any File'),
                 subtitle: const Text('Upload zip, rar, video, doc, etc.'),
                 onTap: () {
@@ -147,9 +154,11 @@ class FilesScreen extends ConsumerWidget {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.folder_shared_outlined, color: AppColors.orange),
+                leading: const Icon(Icons.folder_shared_outlined,
+                    color: AppColors.orange),
                 title: const Text('Share Local Folder'),
-                subtitle: const Text('Allow peers to download files from a folder.'),
+                subtitle:
+                    const Text('Allow peers to download files from a folder.'),
                 onTap: () {
                   Navigator.pop(context);
                   ref.read(lanWorkspaceProvider.notifier).shareFolder();
@@ -175,7 +184,8 @@ class FilesScreen extends ConsumerWidget {
       final pickedFile = result.files.first;
       await ref.read(lanWorkspaceProvider.notifier).uploadAndOfferFile(
             fileName: pickedFile.name,
-            filePath: kIsWeb || pickedFile.path == null ? null : pickedFile.path,
+            filePath:
+                kIsWeb || pickedFile.path == null ? null : pickedFile.path,
             bytes: kIsWeb || pickedFile.path == null ? pickedFile.bytes : null,
           );
     } catch (e) {
@@ -194,7 +204,8 @@ class _FilesView extends StatelessWidget {
       return const KarunEmptyState(
         icon: Icons.folder_open_outlined,
         title: 'No Shared Files',
-        subtitle: 'Upload files to share them instantly with active devices on your local network.',
+        subtitle:
+            'Upload files to share them instantly with active devices on your local network.',
       );
     }
     return ListView.builder(
@@ -237,119 +248,91 @@ class _FolderShareTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ListTile(
-        leading: Icon(
-          isMine ? Icons.folder_shared_rounded : Icons.folder_zip_rounded,
-          color: AppColors.orange,
-          size: 32,
-        ),
-        title: Text(
-          folder.name,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(
-          isMine
-              ? '${context.tr(LocaleKeys.localFolder)} • ${folder.files.length} files'
-              : 'Shared by ${folder.peerNickname} • ${folder.files.length} files',
-        ),
-        trailing: isMine
-            ? TextButton.icon(
-                label: Text(context.tr(LocaleKeys.unshare)),
-                icon: const Icon(Icons.stop_screen_share_outlined, size: 18),
-                onPressed: () => ref.read(lanWorkspaceProvider.notifier).unshareFolder(folder.shareId),
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        // Remove the default divider lines on ExpansionTile
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: true,
+          leading: Icon(
+            isMine ? Icons.folder_shared_rounded : Icons.folder_zip_rounded,
+            color: AppColors.orange,
+            size: 32,
+          ),
+          title: Text(
+            folder.name,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text(
+            isMine
+                ? '${context.tr(LocaleKeys.localFolder)} • ${folder.files.length} files'
+                : 'Shared by ${folder.peerNickname} • ${folder.files.length} files',
+          ),
+          trailing: isMine
+              ? TextButton.icon(
+                  label: Text(context.tr(LocaleKeys.unshare)),
+                  icon: const Icon(Icons.stop_screen_share_outlined, size: 18),
+                  onPressed: () => ref
+                      .read(lanWorkspaceProvider.notifier)
+                      .unshareFolder(folder.shareId),
+                )
+              : null,
+          children: [
+            if (folder.files.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Text('This folder is empty.'),
               )
-            : const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: () => _showFolderContentDialog(context, ref, folder),
-      ),
-    );
-  }
-
-  void _showFolderContentDialog(BuildContext context, WidgetRef ref, SharedFolder folder) {
-    showDialog<void>(
-      context: context,
-      builder: (context) {
-        final theme = Theme.of(context);
-        return AlertDialog(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.folder_open, color: AppColors.orange),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      folder.name,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            else
+              ...folder.files.map((file) => ListTile(
+                    dense: true,
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 24),
+                    leading: Icon(
+                      Utils.getFileIcon(file.fileName),
+                      color: Utils.getFileColor(file.fileName),
+                      size: 22,
+                    ),
+                    title: Text(
+                      file.fileName,
+                      style: const TextStyle(fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Shared by ${folder.peerNickname}',
-                style: theme.textTheme.bodySmall?.copyWith(color: AppColors.slate),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: folder.files.isEmpty
-                ? const Center(
-                    child: Text('This folder is empty.'),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: folder.files.length,
-                    itemBuilder: (context, index) {
-                      final file = folder.files[index];
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.file_present_outlined, size: 20),
-                        title: Text(
-                          file.fileName,
-                          style: const TextStyle(fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          Utils.formatBytes(file.fileSize),
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: isMine
-                            ? null
-                            : IconButton(
-                                icon: const Icon(Icons.download, size: 18),
-                                onPressed: () async {
-                                  Navigator.pop(context);
-                                  final didDownload = await ref.read(lanWorkspaceProvider.notifier).downloadFolderFile(
-                                        shareId: folder.shareId,
-                                        relativePath: file.relativePath,
-                                        fileName: file.fileName,
-                                      );
-                                  if (context.mounted && didDownload) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Download complete!')),
-                                    );
-                                  }
-                                },
-                              ),
-                      );
-                    },
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
+                    subtitle: Text(
+                      Utils.formatBytes(file.fileSize),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: isMine
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.download, size: 18),
+                            tooltip: 'Download',
+                            onPressed: () async {
+                              final didDownload = await ref
+                                  .read(lanWorkspaceProvider.notifier)
+                                  .downloadFolderFile(
+                                    shareId: folder.shareId,
+                                    relativePath: file.relativePath,
+                                    fileName: file.fileName,
+                                  );
+                              if (context.mounted && didDownload) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text('Download complete!')),
+                                );
+                              }
+                            },
+                          ),
+                  )),
+            const SizedBox(height: 8),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -373,7 +356,10 @@ class _FileTransferTile extends ConsumerWidget {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       child: ListTile(
-        leading: const Icon(Icons.cloud_done_outlined),
+        leading: Icon(
+          Utils.getFileIcon(file.fileName),
+          color: Utils.getFileColor(file.fileName),
+        ),
         title: Text(file.fileName),
         subtitle: Text('Uploaded • ${Utils.formatBytes(file.bytes)}'),
         trailing: IconButton(
@@ -416,10 +402,11 @@ Future<void> _downloadFile(
 
   final directory = await getApplicationDocumentsDirectory();
   final savePath = p.join(directory.path, fileName);
-  final didDownload = await ref.read(lanWorkspaceProvider.notifier).downloadFile(
-        transferId: transferId,
-        savePath: savePath,
-      );
+  final didDownload =
+      await ref.read(lanWorkspaceProvider.notifier).downloadFile(
+            transferId: transferId,
+            savePath: savePath,
+          );
   if (context.mounted && didDownload) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Saved to $savePath')),

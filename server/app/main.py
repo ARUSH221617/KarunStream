@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db.engine import init_db, close_db
 from app.api.routes import router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -17,9 +18,11 @@ mdns_advertiser = MdnsAdvertiser(settings)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_db()
     mdns_advertiser.start()
     yield
     mdns_advertiser.stop()
+    await close_db()
 
 
 app = FastAPI(title=settings.app_name, version=settings.version, lifespan=lifespan)
