@@ -9,6 +9,9 @@ import 'package:hugeicons/hugeicons.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../common/ui/providers/windows_settings_provider.dart';
+import 'widgets/common_rounded_item.dart';
+
 import '../../../constants/constants.dart';
 import '../../../extensions/build_context_extension.dart';
 import '../../../generated/locale_keys.g.dart';
@@ -46,6 +49,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final profile =
         ref.watch(profileViewModelProvider.select((it) => it.value?.profile));
+    final windowsSettings = ref.watch(windowsSettingsProvider);
     final dangerousColor =
         context.isDarkMode ? AppColors.rambutan80 : AppColors.rambutan100;
     return Scaffold(
@@ -179,6 +183,35 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             isLast: true,
             onTap: () => context.tryLaunchUrl(Constants.reportProblem),
           ),
+          if (!kIsWeb && Platform.isWindows) ...[
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'Windows Settings',
+                style: AppTheme.title20,
+              ),
+            ),
+            const SizedBox(height: 8),
+            ProfileSwitchItem(
+              icon: HugeIcons.strokeRoundedSettings01,
+              text: 'Minimize to Tray on Close',
+              value: windowsSettings.minimizeToTray,
+              onChanged: (val) {
+                ref.read(windowsSettingsProvider.notifier).setMinimizeToTray(val);
+              },
+              isFirst: true,
+            ),
+            ProfileSwitchItem(
+              icon: HugeIcons.strokeRoundedCoinsSwap,
+              text: 'Auto Connect on Startup',
+              value: windowsSettings.autoConnect,
+              onChanged: (val) {
+                ref.read(windowsSettingsProvider.notifier).setAutoConnect(val);
+              },
+              isLast: true,
+            ),
+          ],
           const SizedBox(height: 24),
           if (_isLogin)
             Column(
@@ -293,6 +326,64 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             }
           }
         },
+      ),
+    );
+  }
+}
+
+class ProfileSwitchItem extends StatelessWidget {
+  final List<List<dynamic>> icon;
+  final String text;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final bool isFirst;
+  final bool isLast;
+
+  const ProfileSwitchItem({
+    super.key,
+    required this.icon,
+    required this.text,
+    required this.value,
+    required this.onChanged,
+    this.isFirst = false,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CommonRoundedItem(
+      isFirst: isFirst,
+      isLast: isLast,
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: isLast
+                ? BorderSide.none
+                : BorderSide(color: context.dividerColor),
+          ),
+        ),
+        child: Row(
+          children: [
+            HugeIcon(
+              icon: icon,
+              color: context.primaryTextColor,
+              size: 20,
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                text,
+                style: AppTheme.body16,
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -186,7 +186,8 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     final serverUriStr = prefs.getString('karunstream_server_uri');
     final serverUri = serverUriStr != null ? Uri.tryParse(serverUriStr) : null;
 
-    if (serverUri != null) {
+    final autoConnect = prefs.getBool('karunstream_auto_connect') ?? true;
+    if (autoConnect && serverUri != null) {
       Future.microtask(() => connect(serverUri));
     }
 
