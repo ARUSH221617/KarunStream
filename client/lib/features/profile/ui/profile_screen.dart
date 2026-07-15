@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hugeicons/hugeicons.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../common/ui/providers/windows_settings_provider.dart';
 import 'widgets/common_rounded_item.dart';
@@ -277,10 +276,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           try {
             Global.showLoading(context);
             await ref.read(profileViewModelProvider.notifier).signOut();
-          } on AuthException catch (error) {
-            if (context.mounted) {
-              context.showErrorSnackBar(error.message);
-            }
           } catch (error) {
             if (context.mounted) {
               context
@@ -310,10 +305,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           try {
             Global.showLoading(context);
             await ref.read(profileViewModelProvider.notifier).signOut();
-          } on AuthException catch (error) {
-            if (context.mounted) {
-              context.showErrorSnackBar(error.message);
-            }
           } catch (error) {
             if (context.mounted) {
               context

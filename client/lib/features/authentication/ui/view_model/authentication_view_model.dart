@@ -1,8 +1,8 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../model/mock_auth.dart';
 import '../../../../constants/constants.dart';
 import '../../../../features/profile/ui/view_model/profile_view_model.dart';
 import '../../../../generated/locale_keys.g.dart';
@@ -51,9 +51,30 @@ class AuthenticationViewModel extends _$AuthenticationViewModel {
     handleResult(result);
   }
 
-  Future<void> signInWithGoogle() async {
+  Future<void> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
     state = const AsyncValue.loading();
-    final result = await AsyncValue.guard(_repository.signInWithGoogle);
+    final result = await AsyncValue.guard(
+      () => _repository.signInWithEmailAndPassword(email: email, password: password),
+    );
+    handleResult(result);
+  }
+
+  Future<void> signUpWithEmailAndPassword({
+    required String email,
+    required String password,
+    required String nickname,
+  }) async {
+    state = const AsyncValue.loading();
+    final result = await AsyncValue.guard(
+      () => _repository.signUpWithEmailAndPassword(
+        email: email,
+        password: password,
+        nickname: nickname,
+      ),
+    );
     handleResult(result);
   }
 

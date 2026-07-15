@@ -91,6 +91,17 @@ class FilesScreen extends ConsumerWidget {
                           state.transferSpeed,
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.stop_circle_outlined, color: AppColors.orange),
+                          onPressed: () {
+                            ref.read(lanWorkspaceProvider.notifier).cancelDownload();
+                          },
+                          tooltip: 'Cancel Transfer',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),

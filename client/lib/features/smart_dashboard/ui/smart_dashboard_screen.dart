@@ -95,14 +95,31 @@ class SmartDashboardScreen extends ConsumerWidget {
         ),
         if (state.isTransferring) ...[
           const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LinearProgressIndicator(
-              value: state.transferProgress,
-              backgroundColor: context.dividerColor,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.watermelon100),
-              minHeight: 6,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: state.transferProgress,
+                    backgroundColor: context.dividerColor,
+                    valueColor: const AlwaysStoppedAnimation<Color>(AppColors.watermelon100),
+                    minHeight: 6,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              IconButton(
+                icon: const Icon(Icons.stop_circle_outlined, color: AppColors.watermelon100),
+                onPressed: () {
+                  ref.read(lanWorkspaceProvider.notifier).cancelDownload();
+                },
+                tooltip: 'Cancel Transfer',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
           ),
         ],
         const SizedBox(height: 24),

@@ -29,6 +29,8 @@ class DatabaseHelper {
   Future<void> _createDB(Database db, int version) async {
     // Heroes table
     await db.execute(HeroTable.createTableQuery);
+    // Profile table
+    await db.execute(ProfileTable.createTableQuery);
   }
 
   Future<void> close() async {

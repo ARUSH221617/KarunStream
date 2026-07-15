@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -151,8 +152,20 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
   final Map<String, Completer<String>> _pendingDownloadRequests = {};
   final Map<String, StreamSubscription<FileSystemEvent>> _folderSubscriptions = {};
   final Map<String, Timer> _debounceTimers = {};
+  CancelToken? _downloadCancelToken;
 
   LanServerRepository get _repository => ref.read(lanServerRepositoryProvider);
+
+  void cancelDownload() {
+    _downloadCancelToken?.cancel('User cancelled download');
+    _downloadCancelToken = null;
+    state = state.copyWith(
+      isTransferring: false,
+      transferProgress: 0,
+      transferSpeed: '0 B/s',
+      transferAverageSpeed: '0 B/s',
+    );
+  }
 
   @override
   LanWorkspaceState build() {
@@ -603,6 +616,7 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     _lastTransferredBytes = 0;
     _lastSpeedUpdateTime = DateTime.now();
     _transferStartTime = DateTime.now();
+    _downloadCancelToken = CancelToken();
     state = state.copyWith(
       isTransferring: true,
       transferProgress: 0,
@@ -615,6 +629,7 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
         serverUri: serverUri,
         transferId: transferId,
         savePath: savePath,
+        cancelToken: _downloadCancelToken,
         onReceiveProgress: (received, total) {
           if (total > 0) {
             final now = DateTime.now();
@@ -644,6 +659,7 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
           }
         },
       );
+      _downloadCancelToken = null;
       state = state.copyWith(
         isTransferring: false,
         transferProgress: 1,
@@ -653,11 +669,13 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
       );
       return true;
     } catch (error) {
+      _downloadCancelToken = null;
+      final isCancelled = error is DioException && error.type == DioExceptionType.cancel;
       state = state.copyWith(
         isTransferring: false,
         transferSpeed: '0 B/s',
         transferAverageSpeed: '0 B/s',
-        error: 'File download failed: $error',
+        error: isCancelled ? 'Download cancelled' : 'File download failed: $error',
       );
       return false;
     }

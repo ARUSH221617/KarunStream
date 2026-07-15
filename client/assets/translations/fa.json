@@ -86,5 +86,14 @@
   "foldersSubtitle": "مرور و دانلود پوشه‌های اشتراک‌گذاری‌شده به صورت زنده توسط همتایان فعال.",
   "filesInFolder": "فایل‌های موجود در پوشه",
   "sharing": "در حال اشتراک‌گذاری",
-  "localFolder": "پوشه محلی"
+  "localFolder": "پوشه محلی",
+  "password": "رمز عبور",
+  "confirmPassword": "تکرار رمز عبور",
+  "passwordRequired": "رمز عبور الزامی است",
+  "passwordMinLength": "رمز عبور باید حداقل ۶ کاراکتر باشد",
+  "nicknameRequired": "نام مستعار الزامی است",
+  "nickname": "نام مستعار",
+  "nicknameHint": "نام مستعار خود را وارد کنید",
+  "dontHaveAccount": "حساب کاربری ندارید؟",
+  "tooManyAttempts": "تعداد تلاش‌های ناموفق زیاد است. لطفا بعد از {} ثانیه مجددا تلاش کنید."
 }

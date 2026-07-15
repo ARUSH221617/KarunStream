@@ -5,21 +5,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../model/mock_auth.dart';
+import '../repository/authentication_repository.dart';
 import '../../../constants/assets.dart';
 import '../../../constants/constants.dart';
 import '../../../extensions/build_context_extension.dart';
 import '../../../generated/locale_keys.g.dart';
-import '../../../main.dart';
 import '../../../routing/routes.dart';
 import '../../../theme/app_theme.dart';
 import '../../../utils/global_loading.dart';
 import '../../profile/ui/view_model/profile_view_model.dart';
+import '../../common/ui/widgets/primary_button.dart';
 import 'view_model/authentication_view_model.dart';
 import 'widgets/continue_as_guest.dart';
 import 'widgets/sign_in_agreement.dart';
-import 'widgets/social_sign_in.dart';
 
 class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
@@ -34,8 +34,10 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   @override
   void initState() {
     super.initState();
-    _authSubscription =
-        supabase.auth.onAuthStateChange.listen(_onAuthStateChange);
+    _authSubscription = ref
+        .read(authenticationRepositoryProvider)
+        .onAuthStateChange
+        .listen(_onAuthStateChange);
   }
 
   @override
@@ -131,8 +133,27 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              const SocialSignIn(),
-              const SizedBox(height: 8),
+              PrimaryButton(
+                text: LocaleKeys.signIn.tr(),
+                isEnable: true,
+                onPressed: () => context.push(Routes.login),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  side: const BorderSide(color: Colors.grey),
+                  shape: RoundedRectangleBorder(
+                     borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                onPressed: () => context.push(Routes.register),
+                child: Text(
+                  LocaleKeys.register.tr(),
+                  style: AppTheme.title16,
+                ),
+              ),
+              const SizedBox(height: 12),
               ContinueAsGuest(onClick: _logInAsGuest),
               const SizedBox(height: 8),
               const SignInAgreement(),

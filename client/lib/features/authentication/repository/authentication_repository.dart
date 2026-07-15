@@ -1,16 +1,14 @@
-import 'dart:developer' as developer;
-
+import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../constants/constants.dart';
-import '../../../environment/env.dart';
-import '../../../generated/locale_keys.g.dart';
-import '../../../main.dart';
+import '../../../constants/database_constants.dart';
+import '../../../utils/database_helper.dart';
 import '../../common/local/shared_preferences_provider.dart';
+import '../model/mock_auth.dart';
 
 part 'authentication_repository.g.dart';
 
@@ -24,19 +22,40 @@ class AuthenticationRepository {
 
   final SharedPreferences _prefs;
 
-  static Future<void>? _googleInitializeFuture;
+  static final StreamController<AuthState> _authStreamController =
+      StreamController<AuthState>.broadcast();
+
+  Stream<AuthState> get onAuthStateChange async* {
+    final session = await getCurrentSession();
+    yield AuthState(AuthChangeEvent.initialSession, session);
+    yield* _authStreamController.stream;
+  }
+
+  Future<Session?> getCurrentSession() async {
+    final userId = _prefs.getString('logged_in_user_id');
+    if (userId == null) return null;
+
+    final db = await DatabaseHelper.instance.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      ProfileTable.tableName,
+      where: '${ProfileTable.columnId} = ?',
+      whereArgs: [userId],
+    );
+
+    if (maps.isEmpty) return null;
+
+    final row = maps.first;
+    final user = User(
+      id: row[ProfileTable.columnId] as String,
+      email: row[ProfileTable.columnEmail] as String,
+      userMetadata: {'full_name': row[ProfileTable.columnName]},
+    );
+    return Session(user: user);
+  }
 
   Future<void> signInWithMagicLink(String email) async {
-    try {
-      await supabase.auth.signInWithOtp(
-        email: email,
-        emailRedirectTo: Constants.supabaseLoginCallback,
-      );
-    } on AuthException catch (error) {
-      throw Exception(error.message);
-    } catch (error) {
-      throw Exception(LocaleKeys.unexpectedErrorOccurred.tr());
-    }
+    // Mock magic link: check if user exists, if not we will register them in verifyOtp
+    // No-op, verifyOtp will handle the actual login/registration
   }
 
   Future<AuthResponse> verifyOtp({
@@ -44,92 +63,173 @@ class AuthenticationRepository {
     required String token,
     required bool isRegister,
   }) async {
-    try {
-      final result = await supabase.auth.verifyOTP(
-        email: email,
-        token: token,
-        type: isRegister ? OtpType.signup : OtpType.magiclink,
+    // ponytail: mock OTP verification. Upgrade path: implement local network-based peer verification or local PIN.
+    final db = await DatabaseHelper.instance.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      ProfileTable.tableName,
+      where: '${ProfileTable.columnEmail} = ?',
+      whereArgs: [email],
+    );
+
+    User user;
+    if (maps.isEmpty) {
+      if (isRegister) {
+        final id = const Uuid().v4();
+        final nickname = email.split('@').first;
+        await db.insert(
+          ProfileTable.tableName,
+          {
+            ProfileTable.columnId: id,
+            ProfileTable.columnEmail: email,
+            ProfileTable.columnPassword: '', // No password for OTP/Magic link
+            ProfileTable.columnName: nickname,
+          },
+        );
+        user = User(id: id, email: email, userMetadata: {'full_name': nickname});
+      } else {
+        throw Exception('User not found');
+      }
+    } else {
+      final row = maps.first;
+      user = User(
+        id: row[ProfileTable.columnId] as String,
+        email: row[ProfileTable.columnEmail] as String,
+        userMetadata: {'full_name': row[ProfileTable.columnName]},
       );
-      return result;
-    } on AuthException catch (error) {
-      throw Exception(error.message);
-    } catch (error) {
-      throw Exception(LocaleKeys.unexpectedErrorOccurred.tr());
+    }
+
+    final session = Session(user: user);
+    final response = AuthResponse(user: user, session: session);
+
+    await _prefs.setString('logged_in_user_id', user.id);
+    _authStreamController.add(AuthState(AuthChangeEvent.signedIn, session));
+
+    return response;
+  }
+
+  int getFailedAttempts() {
+    return _prefs.getInt('auth_failed_attempts') ?? 0;
+  }
+
+  Future<void> incrementFailedAttempts() async {
+    final current = getFailedAttempts() + 1;
+    await _prefs.setInt('auth_failed_attempts', current);
+
+    int lockoutDurationSeconds = 0;
+    if (current >= 10) {
+      lockoutDurationSeconds = 300; // 5 minutes
+    } else if (current >= 5) {
+      lockoutDurationSeconds = 60;  // 1 minute
+    } else if (current >= 3) {
+      lockoutDurationSeconds = 30;  // 30 seconds
+    }
+
+    if (lockoutDurationSeconds > 0) {
+      final lockoutEndTime = DateTime.now().millisecondsSinceEpoch + (lockoutDurationSeconds * 1000);
+      await _prefs.setInt('auth_lockout_timestamp', lockoutEndTime);
     }
   }
 
-  Future<AuthResponse> signInWithGoogle() async {
-    try {
-      developer.log('${Constants.tag} [AuthRepo] Starting signInWithGoogle');
-      const List<String> scopes = <String>[
-        Constants.googleEmailScope,
-        Constants.googleUserInfoScope,
-      ];
+  Future<void> clearFailedAttempts() async {
+    await _prefs.remove('auth_failed_attempts');
+    await _prefs.remove('auth_lockout_timestamp');
+  }
 
-      developer.log('${Constants.tag} [AuthRepo] Initializing GoogleSignIn');
-      _googleInitializeFuture ??= GoogleSignIn.instance.initialize(
-        clientId: Env.googleClientId,
-        serverClientId: Env.googleServerClientId,
-      );
-      await _googleInitializeFuture;
+  int getLockoutTimeRemaining() {
+    final lockoutTimestamp = _prefs.getInt('auth_lockout_timestamp') ?? 0;
+    if (lockoutTimestamp == 0) return 0;
 
-      developer.log('${Constants.tag} [AuthRepo] Authenticating user');
-      final googleUser = await GoogleSignIn.instance.authenticate(
-        scopeHint: scopes,
-      );
-
-      developer
-          .log('${Constants.tag} [AuthRepo] Getting authentication tokens');
-      final googleAuth = googleUser.authentication;
-
-      developer
-          .log('${Constants.tag} [AuthRepo] Getting authorization for scopes');
-      final googleAuthorization =
-          await googleUser.authorizationClient.authorizationForScopes(scopes) ??
-              await googleUser.authorizationClient.authorizeScopes(scopes);
-
-      final accessToken = googleAuthorization.accessToken;
-      final idToken = googleAuth.idToken;
-
-      developer.log(
-          '${Constants.tag} [AuthRepo] idToken: ${idToken != null ? "FOUND" : "NULL"}');
-      developer.log('${Constants.tag} [AuthRepo] accessToken: FOUND');
-
-      if (idToken == null) {
-        throw Exception(LocaleKeys.idTokenNotFound.tr());
-      }
-
-      developer.log('${Constants.tag} [AuthRepo] Signing into Supabase');
-      final result = await supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
-      );
-      developer.log('${Constants.tag} [AuthRepo] Supabase sign in successful');
-      return result;
-    } on AuthException catch (error) {
-      developer
-          .log('${Constants.tag} [AuthRepo] AuthException: ${error.message}');
-      throw Exception(error.message);
-    } catch (error, stackTrace) {
-      developer.log('${Constants.tag} [AuthRepo] Unexpected error: $error',
-          error: error, stackTrace: stackTrace);
-      throw Exception(LocaleKeys.unexpectedErrorOccurred.tr());
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now >= lockoutTimestamp) {
+      _prefs.remove('auth_lockout_timestamp');
+      return 0;
     }
+
+    return ((lockoutTimestamp - now) / 1000).ceil();
+  }
+
+  Future<AuthResponse> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    final secondsRemaining = getLockoutTimeRemaining();
+    if (secondsRemaining > 0) {
+      throw Exception('tooManyAttempts'.tr(args: [secondsRemaining.toString()]));
+    }
+
+    final db = await DatabaseHelper.instance.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      ProfileTable.tableName,
+      where: '${ProfileTable.columnEmail} = ? AND ${ProfileTable.columnPassword} = ?',
+      whereArgs: [email, password],
+    );
+
+    if (maps.isEmpty) {
+      await incrementFailedAttempts();
+      throw Exception('Invalid email or password');
+    }
+
+    final row = maps.first;
+    final user = User(
+      id: row[ProfileTable.columnId] as String,
+      email: row[ProfileTable.columnEmail] as String,
+      userMetadata: {'full_name': row[ProfileTable.columnName]},
+    );
+    final session = Session(user: user);
+    final response = AuthResponse(user: user, session: session);
+
+    await clearFailedAttempts();
+    await _prefs.setString('logged_in_user_id', user.id);
+    _authStreamController.add(AuthState(AuthChangeEvent.signedIn, session));
+
+    return response;
+  }
+
+  Future<AuthResponse> signUpWithEmailAndPassword({
+    required String email,
+    required String password,
+    required String nickname,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+
+    final List<Map<String, dynamic>> existing = await db.query(
+      ProfileTable.tableName,
+      where: '${ProfileTable.columnEmail} = ?',
+      whereArgs: [email],
+    );
+    if (existing.isNotEmpty) {
+      throw Exception('Email already registered');
+    }
+
+    final id = const Uuid().v4();
+    await db.insert(
+      ProfileTable.tableName,
+      {
+        ProfileTable.columnId: id,
+        ProfileTable.columnEmail: email,
+        ProfileTable.columnPassword: password,
+        ProfileTable.columnName: nickname,
+      },
+    );
+
+    final user = User(id: id, email: email, userMetadata: {'full_name': nickname});
+    final session = Session(user: user);
+    final response = AuthResponse(user: user, session: session);
+
+    await _prefs.setString('logged_in_user_id', id);
+    _authStreamController.add(AuthState(AuthChangeEvent.signedIn, session));
+
+    return response;
   }
 
   Future<void> signOut() async {
-    try {
-      await supabase.auth.signOut();
-    } on AuthException catch (error) {
-      throw Exception(error.message);
-    } catch (error) {
-      throw Exception(LocaleKeys.unexpectedErrorOccurred.tr());
-    }
+    await _prefs.remove('logged_in_user_id');
+    _authStreamController.add(AuthState(AuthChangeEvent.signedOut, null));
   }
 
   Future<bool> isLogin() async {
-    return supabase.auth.currentUser != null;
+    final userId = _prefs.getString('logged_in_user_id');
+    return userId != null;
   }
 
   Future<void> setIsLogin(bool value) async {

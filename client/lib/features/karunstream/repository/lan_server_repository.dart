@@ -186,11 +186,13 @@ class LanServerRepository {
     required String transferId,
     required String savePath,
     ProgressCallback? onReceiveProgress,
+    CancelToken? cancelToken,
   }) async {
     await _dio.downloadUri(
       serverUri.replace(path: '/api/v1/files/$transferId/download'),
       savePath,
       onReceiveProgress: onReceiveProgress,
+      cancelToken: cancelToken,
     );
   }
 

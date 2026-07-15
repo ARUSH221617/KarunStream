@@ -6,14 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'environment/env.dart';
 import 'features/common/local/shared_preferences_provider.dart';
 import 'features/karunstream/ui/karunstream_app.dart';
 import 'utils/windows_tray_helper.dart';
-
-SupabaseClient get supabase => Supabase.instance.client;
 
 void main() async {
   developer.log('Starting main()...');
@@ -36,12 +32,6 @@ void main() async {
   try {
     final prefs = await SharedPreferences.getInstance();
     developer.log('SharedPreferences initialized.');
-
-    await Supabase.initialize(
-      url: Env.supabaseUrl,
-      anonKey: Env.supabaseAnonKey,
-    );
-    developer.log('Supabase initialized.');
 
     final container = ProviderContainer(
       overrides: [

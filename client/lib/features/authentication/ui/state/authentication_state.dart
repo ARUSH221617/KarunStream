@@ -1,7 +1,7 @@
 // ignore_for_file: invalid_annotation_target
 
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../model/mock_auth.dart';
 
 part 'authentication_state.freezed.dart';
 
