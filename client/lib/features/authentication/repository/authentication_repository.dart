@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -31,9 +33,37 @@ class AuthenticationRepository {
     yield* _authStreamController.stream;
   }
 
+  Map<String, dynamic> _getWebUsers() {
+    final jsonStr = _prefs.getString('web_users') ?? '{}';
+    return jsonDecode(jsonStr) as Map<String, dynamic>;
+  }
+
+  Future<void> _saveWebUser(String id, String email, String password, String nickname) async {
+    final users = _getWebUsers();
+    users[id] = {
+      'id': id,
+      'email': email,
+      'password': password,
+      'name': nickname,
+    };
+    await _prefs.setString('web_users', jsonEncode(users));
+  }
+
   Future<Session?> getCurrentSession() async {
     final userId = _prefs.getString('logged_in_user_id');
     if (userId == null) return null;
+
+    if (kIsWeb) {
+      final users = _getWebUsers();
+      final userData = users[userId];
+      if (userData == null) return null;
+      final user = User(
+        id: userId,
+        email: userData['email'] as String,
+        userMetadata: {'full_name': userData['name']},
+      );
+      return Session(user: user);
+    }
 
     final db = await DatabaseHelper.instance.database;
     final List<Map<String, dynamic>> maps = await db.query(
@@ -64,38 +94,65 @@ class AuthenticationRepository {
     required bool isRegister,
   }) async {
     // ponytail: mock OTP verification. Upgrade path: implement local network-based peer verification or local PIN.
-    final db = await DatabaseHelper.instance.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      ProfileTable.tableName,
-      where: '${ProfileTable.columnEmail} = ?',
-      whereArgs: [email],
-    );
-
     User user;
-    if (maps.isEmpty) {
-      if (isRegister) {
-        final id = const Uuid().v4();
-        final nickname = email.split('@').first;
-        await db.insert(
-          ProfileTable.tableName,
-          {
-            ProfileTable.columnId: id,
-            ProfileTable.columnEmail: email,
-            ProfileTable.columnPassword: '', // No password for OTP/Magic link
-            ProfileTable.columnName: nickname,
-          },
-        );
-        user = User(id: id, email: email, userMetadata: {'full_name': nickname});
-      } else {
-        throw Exception('User not found');
+
+    if (kIsWeb) {
+      final users = _getWebUsers();
+      String? userId;
+      String? nickname;
+
+      users.forEach((key, value) {
+        final valMap = value as Map<String, dynamic>;
+        if (valMap['email'] == email) {
+          userId = key;
+          nickname = valMap['name'] as String?;
+        }
+      });
+
+      if (userId == null) {
+        if (isRegister) {
+          userId = const Uuid().v4();
+          nickname = email.split('@').first;
+          await _saveWebUser(userId!, email, '', nickname!);
+        } else {
+          throw Exception('User not found');
+        }
       }
+
+      user = User(id: userId!, email: email, userMetadata: {'full_name': nickname});
     } else {
-      final row = maps.first;
-      user = User(
-        id: row[ProfileTable.columnId] as String,
-        email: row[ProfileTable.columnEmail] as String,
-        userMetadata: {'full_name': row[ProfileTable.columnName]},
+      final db = await DatabaseHelper.instance.database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        ProfileTable.tableName,
+        where: '${ProfileTable.columnEmail} = ?',
+        whereArgs: [email],
       );
+
+      if (maps.isEmpty) {
+        if (isRegister) {
+          final id = const Uuid().v4();
+          final nickname = email.split('@').first;
+          await db.insert(
+            ProfileTable.tableName,
+            {
+              ProfileTable.columnId: id,
+              ProfileTable.columnEmail: email,
+              ProfileTable.columnPassword: '', // No password for OTP/Magic link
+              ProfileTable.columnName: nickname,
+            },
+          );
+          user = User(id: id, email: email, userMetadata: {'full_name': nickname});
+        } else {
+          throw Exception('User not found');
+        }
+      } else {
+        final row = maps.first;
+        user = User(
+          id: row[ProfileTable.columnId] as String,
+          email: row[ProfileTable.columnEmail] as String,
+          userMetadata: {'full_name': row[ProfileTable.columnName]},
+        );
+      }
     }
 
     final session = Session(user: user);
@@ -157,24 +214,48 @@ class AuthenticationRepository {
       throw Exception('tooManyAttempts'.tr(args: [secondsRemaining.toString()]));
     }
 
-    final db = await DatabaseHelper.instance.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      ProfileTable.tableName,
-      where: '${ProfileTable.columnEmail} = ? AND ${ProfileTable.columnPassword} = ?',
-      whereArgs: [email, password],
-    );
+    User user;
 
-    if (maps.isEmpty) {
-      await incrementFailedAttempts();
-      throw Exception('Invalid email or password');
+    if (kIsWeb) {
+      final users = _getWebUsers();
+      String? userId;
+      String? nickname;
+
+      users.forEach((key, value) {
+        final valMap = value as Map<String, dynamic>;
+        if (valMap['email'] == email && valMap['password'] == password) {
+          userId = key;
+          nickname = valMap['name'] as String?;
+        }
+      });
+
+      if (userId == null) {
+        await incrementFailedAttempts();
+        throw Exception('Invalid email or password');
+      }
+
+      user = User(id: userId!, email: email, userMetadata: {'full_name': nickname});
+    } else {
+      final db = await DatabaseHelper.instance.database;
+      final List<Map<String, dynamic>> maps = await db.query(
+        ProfileTable.tableName,
+        where: '${ProfileTable.columnEmail} = ? AND ${ProfileTable.columnPassword} = ?',
+        whereArgs: [email, password],
+      );
+
+      if (maps.isEmpty) {
+        await incrementFailedAttempts();
+        throw Exception('Invalid email or password');
+      }
+
+      final row = maps.first;
+      user = User(
+        id: row[ProfileTable.columnId] as String,
+        email: row[ProfileTable.columnEmail] as String,
+        userMetadata: {'full_name': row[ProfileTable.columnName]},
+      );
     }
 
-    final row = maps.first;
-    final user = User(
-      id: row[ProfileTable.columnId] as String,
-      email: row[ProfileTable.columnEmail] as String,
-      userMetadata: {'full_name': row[ProfileTable.columnName]},
-    );
     final session = Session(user: user);
     final response = AuthResponse(user: user, session: session);
 
@@ -190,27 +271,43 @@ class AuthenticationRepository {
     required String password,
     required String nickname,
   }) async {
-    final db = await DatabaseHelper.instance.database;
-
-    final List<Map<String, dynamic>> existing = await db.query(
-      ProfileTable.tableName,
-      where: '${ProfileTable.columnEmail} = ?',
-      whereArgs: [email],
-    );
-    if (existing.isNotEmpty) {
-      throw Exception('Email already registered');
-    }
-
     final id = const Uuid().v4();
-    await db.insert(
-      ProfileTable.tableName,
-      {
-        ProfileTable.columnId: id,
-        ProfileTable.columnEmail: email,
-        ProfileTable.columnPassword: password,
-        ProfileTable.columnName: nickname,
-      },
-    );
+
+    if (kIsWeb) {
+      final users = _getWebUsers();
+      bool exists = false;
+      users.forEach((key, value) {
+        final valMap = value as Map<String, dynamic>;
+        if (valMap['email'] == email) {
+          exists = true;
+        }
+      });
+      if (exists) {
+        throw Exception('Email already registered');
+      }
+      await _saveWebUser(id, email, password, nickname);
+    } else {
+      final db = await DatabaseHelper.instance.database;
+
+      final List<Map<String, dynamic>> existing = await db.query(
+        ProfileTable.tableName,
+        where: '${ProfileTable.columnEmail} = ?',
+        whereArgs: [email],
+      );
+      if (existing.isNotEmpty) {
+        throw Exception('Email already registered');
+      }
+
+      await db.insert(
+        ProfileTable.tableName,
+        {
+          ProfileTable.columnId: id,
+          ProfileTable.columnEmail: email,
+          ProfileTable.columnPassword: password,
+          ProfileTable.columnName: nickname,
+        },
+      );
+    }
 
     final user = User(id: id, email: email, userMetadata: {'full_name': nickname});
     final session = Session(user: user);
