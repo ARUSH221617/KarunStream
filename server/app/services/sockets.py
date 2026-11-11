@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from time import time
 
@@ -76,17 +77,39 @@ class PeerRegistry:
         payload: dict,
         exclude_peer_id: str | None = None,
     ) -> None:
-        stale_peer_ids: list[str] = []
-        event = WebSocketEvent(event_type=event_type, payload=payload).model_dump(mode="json")
-        for peer_id, websocket in list(self._connections.items()):
-            if peer_id == exclude_peer_id:
+        # Serialize once, fan out concurrently – slow or stalled clients no
+        # longer delay delivery to the rest of the peers.
+        message = WebSocketEvent(event_type=event_type, payload=payload).model_dump(mode="json")
+        targets = [
+            (peer_id, websocket)
+            for peer_id, websocket in list(self._connections.items())
+            if peer_id != exclude_peer_id
+        ]
+        if not targets:
+            return
+        results = await asyncio.gather(
+            *(websocket.send_json(message) for _, websocket in targets),
+            return_exceptions=True,
+        )
+        for (peer_id, _), result in zip(targets, results):
+            if isinstance(result, RuntimeError):
+                await self.unregister(peer_id)
+
+    async def send_many(self, peer_ids: list[str], event_type: EventType, payload: dict) -> None:
+        """Send the same event to multiple peers concurrently."""
+        message = WebSocketEvent(event_type=event_type, payload=payload).model_dump(mode="json")
+        websockets = [(pid, self._connections.get(pid)) for pid in peer_ids]
+        results = await asyncio.gather(
+            *(ws.send_json(message) for pid, ws in websockets if ws is not None),
+            return_exceptions=True,
+        )
+        sent = iter(results)
+        for peer_id, ws in websockets:
+            if ws is None:
                 continue
-            try:
-                await websocket.send_json(event)
-            except RuntimeError:
-                stale_peer_ids.append(peer_id)
-        for peer_id in stale_peer_ids:
-            await self.unregister(peer_id)
+            result = next(sent)
+            if isinstance(result, RuntimeError):
+                await self.unregister(peer_id)
 
     def mark_seen(self, peer_id: str) -> None:
         peer = self._peers.get(peer_id)
@@ -196,11 +219,13 @@ class PeerRegistry:
             if payload.receiver_id == "global":
                 await self.broadcast(event.event_type, outgoing)
             elif conv and conv.conversation_type in {"group", "channel"}:
-                # Broadcast to group/channel members
+                # Fan out to group/channel members concurrently
                 members = await db_service.get_conversation_members(conv_id)
-                for m in members:
-                    if m.peer_id != sender_id:
-                        await self.send(m.peer_id, event.event_type, outgoing)
+                await self.send_many(
+                    [m.peer_id for m in members if m.peer_id != sender_id],
+                    event.event_type,
+                    outgoing,
+                )
             else:
                 delivered = await self.send(payload.receiver_id, event.event_type, outgoing)
                 if not delivered:
@@ -225,9 +250,11 @@ class PeerRegistry:
                     conv = await db_service.get_conversation(edited_msg.conversation_id)
                     if conv and conv.conversation_type in {"group", "channel"}:
                         members = await db_service.get_conversation_members(edited_msg.conversation_id)
-                        for m in members:
-                            if m.peer_id != sender_id:
-                                await self.send(m.peer_id, event.event_type, outgoing)
+                        await self.send_many(
+                            [m.peer_id for m in members if m.peer_id != sender_id],
+                            event.event_type,
+                            outgoing,
+                        )
                     else:
                         await self.send(payload.receiver_id, event.event_type, outgoing)
             return

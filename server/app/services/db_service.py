@@ -7,7 +7,7 @@ import time
 from typing import Any, Sequence
 from sqlalchemy import select, and_, or_, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import raiseload, selectinload
 
 from app.db.engine import get_session_factory
 from app.db.tables import (
@@ -242,7 +242,11 @@ class DatabaseService:
                 select(ConversationRow)
                 .join(ConversationMemberRow, ConversationRow.conversation_id == ConversationMemberRow.conversation_id)
                 .where(ConversationMemberRow.user_peer_id == peer_id)
-                .options(selectinload(ConversationRow.members))
+                .options(
+                    selectinload(ConversationRow.members).selectinload(ConversationMemberRow.user),
+                    # Load in one batch so callers can read members without N+1 queries.
+                    raiseload(ConversationRow.messages),
+                )
                 .order_by(ConversationRow.updated_at.desc())
             )
             res = await session.execute(stmt)
@@ -313,11 +317,14 @@ class DatabaseService:
                         session.add(att)
                     await session.flush()
 
-                await session.refresh(msg)
-                # Load attachments
-                stmt = select(MessageRow).where(MessageRow.msg_id == msg_id).options(selectinload(MessageRow.attachments))
-                res = await session.execute(stmt)
-                return res.scalar_one()
+                # Attributes stay loaded thanks to expire_on_commit=False;
+                # fetch the attachment rows once so callers can read
+                # ``msg.attachments`` without triggering lazy IO.
+                att_res = await session.execute(
+                    select(MessageAttachmentRow).where(MessageAttachmentRow.msg_id == msg_id)
+                )
+                msg.attachments = list(att_res.scalars().all())
+                return msg
 
     async def get_messages(
         self,
