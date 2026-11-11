@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import ipaddress
 import socket
@@ -10,12 +11,34 @@ logger = logging.getLogger(__name__)
 
 
 class MdnsAdvertiser:
+    """Advertise the server over mDNS.
+
+    ``start``/``stop`` are non-blocking: the underlying zeroconf operations
+    (which open sockets and wait for network events) run on a worker thread
+    so they never stall the event loop or application startup/shutdown.
+    Direct synchronous registration is still available via ``start_blocking``
+    for tests and embedded use.
+    """
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._zeroconf: Any | None = None
         self._service_info: Any | None = None
+        self._task: asyncio.Task | None = None
 
     def start(self) -> None:
+        if not self.settings.enable_mdns:
+            logger.info("mDNS advertising disabled")
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop running – fall back to a blocking registration.
+            self.start_blocking()
+            return
+        self._task = loop.create_task(asyncio.to_thread(self.start_blocking))
+
+    def start_blocking(self) -> None:
         if not self.settings.enable_mdns:
             logger.info("mDNS advertising disabled")
             return
@@ -48,7 +71,7 @@ class MdnsAdvertiser:
                 "mDNS advertising unavailable on this network/container: %s",
                 exc.__class__.__name__,
             )
-            self.stop()
+            self.stop_blocking()
             return
 
         logger.info(
@@ -59,6 +82,17 @@ class MdnsAdvertiser:
         )
 
     def stop(self) -> None:
+        if self._task is not None:
+            if self._task.done():
+                self._task = None
+            else:
+                # Registration is still in flight; cancel it instead of
+                # blocking shutdown waiting on an unusable network.
+                self._task.cancel()
+                self._task = None
+        self.stop_blocking()
+
+    def stop_blocking(self) -> None:
         if self._zeroconf and self._service_info:
             with suppress(Exception):
                 self._zeroconf.unregister_service(self._service_info)
