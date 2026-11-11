@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 from pathlib import Path
 from time import time
@@ -58,15 +59,34 @@ async def upload_file(
     started_at = time()
     transfer_id = str(uuid4())
 
-    try:
-        with destination.open("wb") as output:
+    loop = asyncio.get_running_loop()
+
+    async def _drain_upload() -> None:
+        nonlocal total_bytes
+        # Stream the upload to disk in a worker thread so hashing and file
+        # I/O never block the event loop; reads stay async on Starlette's
+        # spooled temp file.  The hash is computed incrementally while
+        # streaming instead of buffering the whole body in memory.
+        output = await loop.run_in_executor(None, destination.open, "wb")
+        try:
             while chunk := await file.read(settings.chunk_size):
                 total_bytes += len(chunk)
                 if total_bytes > settings.max_upload_bytes:
-                    destination.unlink(missing_ok=True)
-                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Upload too large")
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="Upload too large",
+                    )
                 sha256.update(chunk)
-                output.write(chunk)
+                await loop.run_in_executor(None, output.write, chunk)
+            await loop.run_in_executor(None, output.flush)
+        finally:
+            await loop.run_in_executor(None, output.close)
+
+    try:
+        await _drain_upload()
+    except HTTPException:
+        destination.unlink(missing_ok=True)
+        raise
     finally:
         await file.close()
 
@@ -217,7 +237,7 @@ async def list_conversations(x_peer_id: str = Header(...)) -> dict:
     conversations = await db_service.get_user_conversations(x_peer_id)
     result = []
     for conv in conversations:
-        members = await db_service.get_conversation_members(conv.conversation_id)
+        # Members were eager-loaded via selectinload – no per-conversation query.
         result.append({
             "conversation_id": conv.conversation_id,
             "conversation_type": conv.conversation_type,
@@ -227,7 +247,7 @@ async def list_conversations(x_peer_id: str = Header(...)) -> dict:
             "created_at": conv.created_at,
             "updated_at": conv.updated_at,
             "is_archived": conv.is_archived,
-            "members": [m.peer_id for m in members],
+            "members": [m.user_peer_id for m in conv.members],
         })
     return {"conversations": result}
 
