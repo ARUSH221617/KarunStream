@@ -20,6 +20,7 @@ import '../model/server_status.dart';
 import '../model/shared_folder.dart';
 import '../model/conversation.dart';
 import '../repository/lan_server_repository.dart';
+import '../services/embedded_server.dart';
 import '../../../constants/constants.dart';
 import '../../../utils/utils.dart';
 import '../../profile/ui/view_model/profile_view_model.dart';
@@ -52,6 +53,7 @@ class LanWorkspaceState {
     this.isTransferring = false,
     this.isConnecting = false,
     this.isConnected = false,
+    this.isHostMode = false,
     this.error,
     this.sharedFolders = const [],
     this.localShares = const {},
@@ -77,6 +79,7 @@ class LanWorkspaceState {
   final bool isTransferring;
   final bool isConnecting;
   final bool isConnected;
+  final bool isHostMode;
   final String? error;
   final List<SharedFolder> sharedFolders;
   final Map<String, String> localShares;
@@ -103,6 +106,7 @@ class LanWorkspaceState {
     bool? isTransferring,
     bool? isConnecting,
     bool? isConnected,
+    bool? isHostMode,
     String? error,
     List<SharedFolder>? sharedFolders,
     Map<String, String>? localShares,
@@ -131,6 +135,7 @@ class LanWorkspaceState {
       isTransferring: isTransferring ?? this.isTransferring,
       isConnecting: isConnecting ?? this.isConnecting,
       isConnected: isConnected ?? this.isConnected,
+      isHostMode: isHostMode ?? this.isHostMode,
       error: clearError ? null : error ?? this.error,
       sharedFolders: sharedFolders ?? this.sharedFolders,
       localShares: localShares ?? this.localShares,
@@ -153,6 +158,10 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
   final Map<String, StreamSubscription<FileSystemEvent>> _folderSubscriptions = {};
   final Map<String, Timer> _debounceTimers = {};
   CancelToken? _downloadCancelToken;
+  EmbeddedServer? _embeddedServer;
+
+  bool get isHostMode => state.isHostMode;
+  EmbeddedServer? get embeddedServer => _embeddedServer;
 
   LanServerRepository get _repository => ref.read(lanServerRepositoryProvider);
 
@@ -181,6 +190,8 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
         timer.cancel();
       }
       _debounceTimers.clear();
+      _embeddedServer?.stop();
+      _embeddedServer = null;
     });
 
     final profileName = ref.watch(profileViewModelProvider
@@ -296,14 +307,60 @@ class LanWorkspaceController extends Notifier<LanWorkspaceState> {
     final prefs = ref.read(sharedPreferencesProvider);
     prefs.remove('karunstream_server_uri');
 
+    if (state.isHostMode) {
+      _embeddedServer?.stop();
+      _embeddedServer = null;
+    }
+
     state = state.copyWith(
       isConnected: false,
       isConnecting: false,
+      isHostMode: false,
       status: null,
       peers: [],
       sharedFolders: [],
       localShares: {},
     );
+  }
+
+  Future<void> startHostMode({int port = 0}) async {
+    if (kIsWeb) {
+      state = state.copyWith(error: 'Host mode is not supported on web.');
+      return;
+    }
+
+    try {
+      if (_embeddedServer != null) {
+        await _embeddedServer!.stop();
+      }
+      final server = EmbeddedServer();
+      await server.start(port: port);
+      _embeddedServer = server;
+
+      state = state.copyWith(isHostMode: true, clearError: true);
+
+      final localPort = server.port;
+      final serverUri = Uri.parse('http://127.0.0.1:$localPort');
+      await connect(serverUri);
+    } catch (e) {
+      state = state.copyWith(
+        isHostMode: false,
+        error: 'Failed to start host mode: $e',
+      );
+    }
+  }
+
+  Future<void> stopHostMode() async {
+    try {
+      await _embeddedServer?.stop();
+      _embeddedServer = null;
+      disconnect();
+      state = state.copyWith(isHostMode: false);
+    } catch (e) {
+      state = state.copyWith(
+        error: 'Failed to stop host mode: $e',
+      );
+    }
   }
 
   void sendChat(String body, {List<FileOffer> fileOffers = const []}) {

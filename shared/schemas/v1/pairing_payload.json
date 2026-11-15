@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://karunstream.local/schemas/v1/pairing_payload.json",
+  "title": "KarunStream Pairing Payload",
+  "type": "object",
+  "required": [
+    "pairing_url",
+    "host_ip",
+    "port",
+    "server_name"
+  ],
+  "properties": {
+    "pairing_url": {
+      "type": "string",
+      "pattern": "^karunstream://pair(\\?.*)?$"
+    },
+    "host_ip": {
+      "type": "string"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "auth_token": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tls_fingerprint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "wifi_qr": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "server_name": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

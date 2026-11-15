@@ -28,11 +28,102 @@ class EventType(StrEnum):
     SHARE_FILE_ERROR = "SHARE_FILE_ERROR"
 
 
+class ErrorCode(StrEnum):
+    OUT_OF_SPACE = "OUT_OF_SPACE"
+    OFFSET_MISMATCH = "OFFSET_MISMATCH"
+    FILE_MODIFIED = "FILE_MODIFIED"
+    AUTH_EXPIRED = "AUTH_EXPIRED"
+    TRANSFER_NOT_FOUND = "TRANSFER_NOT_FOUND"
+    INVALID_CHECKSUM = "INVALID_CHECKSUM"
+    PERMISSION_DENIED = "PERMISSION_DENIED"
+    VALIDATION_FAILED = "VALIDATION_FAILED"
+
+
+class ErrorEventPayload(BaseModel):
+    event_type: Literal["ERROR"] = "ERROR"
+    error_code: ErrorCode
+    message: str = Field(min_length=1)
+    transfer_id: str | None = None
+    details: dict[str, Any] | None = None
+    timestamp: float = Field(default_factory=time)
+
+
 class PeerRegistration(BaseModel):
     peer_id: str = Field(default_factory=lambda: str(uuid4()))
     nickname: str = "Anonymous"
     platform: str = "unknown"
     avatar_index: int | None = None
+    auth_token: str | None = None
+
+
+class PeerHandshake(BaseModel):
+    v: str = "1.0"
+    peer_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1)
+    nickname: str = Field(default="Anonymous", min_length=1)
+    platform: Literal["android", "ios", "windows", "macos", "linux", "web", "unknown"] = "unknown"
+    capabilities: list[str] = Field(
+        default_factory=lambda: ["resume", "chunk_manifest", "folders", "tus_upload"]
+    )
+    tls_fingerprint: str | None = Field(default=None, pattern=r"^[a-fA-F0-9]{64}$")
+    auth_token: str | None = None
+
+
+class SystemStatus(BaseModel):
+    status: str = "healthy"
+    server_id: str
+    version: str
+    active_peers: int = 0
+    capabilities: list[str] = Field(
+        default_factory=lambda: ["resume", "chunk_manifest", "folders", "tus_upload"]
+    )
+
+
+class PairingPayload(BaseModel):
+    pairing_url: str
+    host_ip: str
+    port: int = Field(ge=1, le=65535)
+    auth_token: str | None = None
+    tls_fingerprint: str | None = None
+    wifi_qr: str | None = None
+    server_name: str
+
+
+class TransferInitPayload(BaseModel):
+    transfer_id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    )
+    sender_id: str = Field(min_length=1)
+    recipient_id: str = Field(min_length=1)
+    file_name: str = Field(min_length=1)
+    total_bytes: int = Field(ge=0)
+    chunk_size: int = Field(default=1048576, ge=65536)
+    sha256_prefix: str | None = Field(default=None, pattern=r"^([a-fA-F0-9]{64})?$")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class TransferInitResponse(BaseModel):
+    transfer_id: str
+    upload_url: str
+    upload_offset: int = 0
+    chunk_size: int = 1048576
+
+
+class ChunkHashRecord(BaseModel):
+    chunk_index: int = Field(ge=0)
+    byte_offset: int = Field(ge=0)
+    byte_length: int = Field(ge=0)
+    sha256: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
+
+
+class TransferManifestPayload(BaseModel):
+    transfer_id: str = Field(
+        default_factory=lambda: str(uuid4()),
+        pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+    )
+    chunk_size: int = Field(ge=65536)
+    total_chunks: int = Field(ge=1)
+    chunks: list[ChunkHashRecord] = Field(default_factory=list)
 
 
 class Peer(BaseModel):

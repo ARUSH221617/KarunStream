@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://karunstream.local/schemas/v1/peer_handshake.json",
+  "title": "KarunStream Peer Handshake",
+  "type": "object",
+  "required": [
+    "v",
+    "peer_id",
+    "nickname",
+    "platform",
+    "capabilities"
+  ],
+  "properties": {
+    "v": {
+      "type": "string",
+      "minLength": 1
+    },
+    "peer_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nickname": {
+      "type": "string",
+      "minLength": 1
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "android",
+        "ios",
+        "windows",
+        "macos",
+        "linux",
+        "web",
+        "unknown"
+      ]
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tls_fingerprint": {
+      "type": ["string", "null"],
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "auth_token": {
+      "type": ["string", "null"]
+    }
+  },
+  "additionalProperties": false
+}

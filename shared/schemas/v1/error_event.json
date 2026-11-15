@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://karunstream.local/schemas/v1/error_event.json",
+  "title": "KarunStream Error Event",
+  "type": "object",
+  "required": [
+    "event_type",
+    "error_code",
+    "message",
+    "timestamp"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "const": "ERROR"
+    },
+    "error_code": {
+      "type": "string",
+      "enum": [
+        "OUT_OF_SPACE",
+        "OFFSET_MISMATCH",
+        "FILE_MODIFIED",
+        "AUTH_EXPIRED",
+        "TRANSFER_NOT_FOUND",
+        "INVALID_CHECKSUM",
+        "PERMISSION_DENIED",
+        "VALIDATION_FAILED"
+      ]
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1
+    },
+    "transfer_id": {
+      "type": ["string", "null"]
+    },
+    "details": {
+      "type": ["object", "null"]
+    },
+    "timestamp": {
+      "type": "number"
+    }
+  },
+  "additionalProperties": false
+}

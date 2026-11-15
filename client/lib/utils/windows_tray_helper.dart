@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:system_tray/system_tray.dart';
 import 'package:window_manager/window_manager.dart';
@@ -25,6 +26,9 @@ class WindowsTrayManager extends WindowListener {
     await windowManager.ensureInitialized();
     windowManager.addListener(this);
     await windowManager.setPreventClose(true);
+
+    await windowManager.show();
+    await windowManager.focus();
 
     // Initialize system tray icon
     await _systemTray.initSystemTray(

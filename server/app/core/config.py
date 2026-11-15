@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     enable_tls: bool = False
     tls_dir: Path = Path("/tmp/karunstream/tls")
     cors_origins: list[str] = ["*"]
+    auth_token: str | None = None
+    tls_fingerprint: str | None = None
+    enforce_lan_boundary: bool = True
+    hotspot_ssid: str | None = None
+    hotspot_password: str | None = None
+    hotspot_auth_type: str = "WPA"
 
 
 @lru_cache

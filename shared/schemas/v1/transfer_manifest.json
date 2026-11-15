@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://karunstream.local/schemas/v1/transfer_manifest.json",
+  "title": "KarunStream Transfer Manifest",
+  "type": "object",
+  "required": [
+    "transfer_id",
+    "chunk_size",
+    "total_chunks",
+    "chunks"
+  ],
+  "properties": {
+    "transfer_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "chunk_size": {
+      "type": "integer",
+      "minimum": 65536
+    },
+    "total_chunks": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "chunk_index",
+          "byte_offset",
+          "byte_length",
+          "sha256"
+        ],
+        "properties": {
+          "chunk_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byte_offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byte_length": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

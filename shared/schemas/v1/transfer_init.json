@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://karunstream.local/schemas/v1/transfer_init.json",
+  "title": "KarunStream Transfer Init Payload",
+  "type": "object",
+  "required": [
+    "transfer_id",
+    "sender_id",
+    "recipient_id",
+    "file_name",
+    "total_bytes"
+  ],
+  "properties": {
+    "transfer_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "sender_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "recipient_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "file_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "total_bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "chunk_size": {
+      "type": "integer",
+      "minimum": 65536,
+      "default": 1048576
+    },
+    "sha256_prefix": {
+      "type": ["string", "null"],
+      "pattern": "^([a-fA-F0-9]{64})?$"
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "mtime": {
+          "type": "number"
+        },
+        "mime_type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

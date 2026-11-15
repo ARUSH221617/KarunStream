@@ -17,11 +17,15 @@ from app.db.tables import (
     MessageRow,
     MessageAttachmentRow,
     FileRecordRow,
+    TransferRow,
+    TransferChunkRow,
+    TransferStatus,
     ConversationType,
     MemberRole,
     MessageType,
     compute_message_hash,
 )
+from app.models import ChunkHashRecord, TransferInitPayload, TransferManifestPayload
 
 logger = logging.getLogger(__name__)
 
@@ -290,19 +294,7 @@ class DatabaseService:
                 )
                 await session.execute(conv_update_stmt)
 
-                msg = MessageRow(
-                    msg_id=msg_id,
-                    conversation_id=conversation_id,
-                    sender_id=sender_id,
-                    body=body,
-                    message_type=message_type,
-                    timestamp=ts,
-                    reply_to_msg_id=reply_to_msg_id,
-                    message_hash=msg_hash,
-                )
-                session.add(msg)
-                await session.flush()
-
+                attachment_rows = []
                 if attachments:
                     for att_data in attachments:
                         att = MessageAttachmentRow(
@@ -314,16 +306,21 @@ class DatabaseService:
                             stored_path=att_data.get("stored_path"),
                             download_url=att_data.get("download_url"),
                         )
-                        session.add(att)
-                    await session.flush()
+                        attachment_rows.append(att)
 
-                # Attributes stay loaded thanks to expire_on_commit=False;
-                # fetch the attachment rows once so callers can read
-                # ``msg.attachments`` without triggering lazy IO.
-                att_res = await session.execute(
-                    select(MessageAttachmentRow).where(MessageAttachmentRow.msg_id == msg_id)
+                msg = MessageRow(
+                    msg_id=msg_id,
+                    conversation_id=conversation_id,
+                    sender_id=sender_id,
+                    body=body,
+                    message_type=message_type,
+                    timestamp=ts,
+                    reply_to_msg_id=reply_to_msg_id,
+                    message_hash=msg_hash,
+                    attachments=attachment_rows,
                 )
-                msg.attachments = list(att_res.scalars().all())
+                session.add(msg)
+                await session.flush()
                 return msg
 
     async def get_messages(
@@ -497,6 +494,166 @@ class DatabaseService:
                     await session.flush()
                     return True
                 return False
+
+    # -----------------------------------------------------------------------
+    # Resumable Transfers
+    # -----------------------------------------------------------------------
+
+    async def create_transfer(self, init_payload: TransferInitPayload) -> TransferRow:
+        """Create and persist a new resumable transfer record."""
+        now = time.time()
+        async with self.session_factory() as session:
+            async with session.begin():
+                transfer = TransferRow(
+                    transfer_id=init_payload.transfer_id,
+                    sender_id=init_payload.sender_id,
+                    recipient_id=init_payload.recipient_id,
+                    file_name=init_payload.file_name,
+                    total_bytes=init_payload.total_bytes,
+                    committed_bytes=0,
+                    chunk_size=init_payload.chunk_size,
+                    status=TransferStatus.INIT,
+                    sha256_prefix=init_payload.sha256_prefix,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(transfer)
+                await session.flush()
+                await session.refresh(transfer)
+                return transfer
+
+    async def get_transfer(self, transfer_id: str) -> TransferRow | None:
+        """Fetch a transfer by transfer_id with chunks loaded."""
+        async with self.session_factory() as session:
+            stmt = (
+                select(TransferRow)
+                .where(TransferRow.transfer_id == transfer_id)
+                .options(selectinload(TransferRow.chunks))
+            )
+            res = await session.execute(stmt)
+            return res.scalar_one_or_none()
+
+    async def record_chunk(
+        self,
+        transfer_id: str,
+        chunk_index: int,
+        byte_offset: int,
+        byte_length: int,
+        block_hash: str,
+    ) -> None:
+        """Record or update a verified chunk hash for a transfer."""
+        now = time.time()
+        async with self.session_factory() as session:
+            async with session.begin():
+                stmt = select(TransferChunkRow).where(
+                    and_(
+                        TransferChunkRow.transfer_id == transfer_id,
+                        TransferChunkRow.chunk_index == chunk_index,
+                    )
+                )
+                res = await session.execute(stmt)
+                chunk_row = res.scalar_one_or_none()
+                if chunk_row is None:
+                    chunk_row = TransferChunkRow(
+                        transfer_id=transfer_id,
+                        chunk_index=chunk_index,
+                        byte_offset=byte_offset,
+                        byte_length=byte_length,
+                        block_hash=block_hash,
+                    )
+                    session.add(chunk_row)
+                else:
+                    chunk_row.byte_offset = byte_offset
+                    chunk_row.byte_length = byte_length
+                    chunk_row.block_hash = block_hash
+
+                await session.execute(
+                    update(TransferRow)
+                    .where(TransferRow.transfer_id == transfer_id)
+                    .values(updated_at=now)
+                )
+
+    async def update_transfer_progress(
+        self,
+        transfer_id: str,
+        committed_bytes: int,
+        status: str = "ACTIVE",
+    ) -> None:
+        """Update progress and status of a transfer."""
+        now = time.time()
+        async with self.session_factory() as session:
+            async with session.begin():
+                stmt = (
+                    update(TransferRow)
+                    .where(TransferRow.transfer_id == transfer_id)
+                    .values(
+                        committed_bytes=committed_bytes,
+                        status=status,
+                        updated_at=now,
+                    )
+                )
+                await session.execute(stmt)
+
+    async def complete_transfer(
+        self,
+        transfer_id: str,
+        sha256: str,
+        stored_path: str,
+        download_url: str,
+    ) -> TransferRow:
+        """Mark a transfer completed and record final file attributes."""
+        now = time.time()
+        async with self.session_factory() as session:
+            async with session.begin():
+                stmt = (
+                    select(TransferRow)
+                    .where(TransferRow.transfer_id == transfer_id)
+                    .options(selectinload(TransferRow.chunks))
+                )
+                res = await session.execute(stmt)
+                transfer = res.scalar_one_or_none()
+                if not transfer:
+                    raise ValueError(f"Transfer {transfer_id} not found")
+
+                transfer.status = TransferStatus.COMPLETED
+                transfer.committed_bytes = transfer.total_bytes
+                transfer.sha256 = sha256
+                transfer.stored_path = stored_path
+                transfer.download_url = download_url
+                transfer.updated_at = now
+                await session.flush()
+                await session.refresh(transfer)
+                return transfer
+
+    async def get_transfer_manifest(self, transfer_id: str) -> TransferManifestPayload | None:
+        """Return the transfer manifest payload with verified chunk records."""
+        transfer = await self.get_transfer(transfer_id)
+        if transfer is None:
+            return None
+
+        chunks = sorted(transfer.chunks, key=lambda c: c.chunk_index)
+        expected_chunks = (
+            (transfer.total_bytes + transfer.chunk_size - 1) // transfer.chunk_size
+            if transfer.total_bytes > 0
+            else 1
+        )
+        total_chunks = max(1, max(len(chunks), expected_chunks))
+
+        return TransferManifestPayload(
+            transfer_id=transfer.transfer_id,
+            chunk_size=transfer.chunk_size,
+            total_chunks=total_chunks,
+            chunks=[
+                ChunkHashRecord(
+                    chunk_index=c.chunk_index,
+                    byte_offset=c.byte_offset,
+                    byte_length=c.byte_length,
+                    sha256=c.block_hash,
+                )
+                for c in chunks
+            ],
+        )
+
 
 
 db_service = DatabaseService()

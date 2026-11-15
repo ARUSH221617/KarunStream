@@ -12,7 +12,7 @@ from typing import AsyncGenerator
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import AsyncAdaptedQueuePool
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool, StaticPool
 
 from app.core.config import get_settings
 
@@ -65,18 +65,23 @@ def _attach_sqlite_pragmas(engine) -> None:
 def _create_engine(db_url: str):
     """Create an async engine tuned for SQLite workloads.
 
-    The aiosqlite dialect uses a QueuePool (one pooled connection per
-    concurrent writer) instead of the default NullPool so connections are
+    In-memory databases use StaticPool to preserve the schema across
+    connections. On-disk databases use AsyncAdaptedQueuePool so connections are
     reused across requests.
     """
-    kwargs = {}
-    if ":memory:" not in (db_url or ""):
+    is_memory = ":memory:" in (db_url or "")
+    if is_memory:
+        poolclass = StaticPool
+        kwargs = {}
+    else:
+        poolclass = AsyncAdaptedQueuePool
         kwargs = {"pool_size": 5, "max_overflow": 10}
+
     engine = create_async_engine(
         db_url,
         echo=False,
         future=True,
-        poolclass=None if ":memory:" in (db_url or "") else AsyncAdaptedQueuePool,
+        poolclass=poolclass,
         pool_pre_ping=True,
         connect_args={"check_same_thread": False},
         **kwargs,
@@ -131,6 +136,8 @@ async def reset_engine_for_testing(db_url: str) -> None:
     global _engine, _session_factory
     if _engine is not None:
         await _engine.dispose()
+        _engine = None
+        _session_factory = None
     _engine = _create_engine(db_url)
     _session_factory = async_sessionmaker(
         bind=_engine,

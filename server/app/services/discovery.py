@@ -51,6 +51,11 @@ class MdnsAdvertiser:
 
         host_ip = self.settings.advertised_ip or _get_lan_ip()
         properties = {
+            "v": "1.0",
+            "role": "host",
+            "port": str(self.settings.port),
+            "caps": "resume,chunk_manifest,folders,tus_upload",
+            "tls": self.settings.tls_fingerprint or "",
             "server_name": self.settings.server_name,
             "api": f"http://{host_ip}:{self.settings.port}",
             "ws": f"ws://{host_ip}:{self.settings.port}/ws/orchestrator",
@@ -82,6 +87,8 @@ class MdnsAdvertiser:
         )
 
     def stop(self) -> None:
+        if not self.settings.enable_mdns:
+            return
         if self._task is not None:
             if self._task.done():
                 self._task = None
@@ -93,6 +100,8 @@ class MdnsAdvertiser:
         self.stop_blocking()
 
     def stop_blocking(self) -> None:
+        if not self.settings.enable_mdns:
+            return
         if self._zeroconf and self._service_info:
             with suppress(Exception):
                 self._zeroconf.unregister_service(self._service_info)

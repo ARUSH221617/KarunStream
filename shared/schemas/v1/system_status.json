@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://karunstream.local/schemas/v1/system_status.json",
+  "title": "KarunStream System Status",
+  "type": "object",
+  "required": [
+    "status",
+    "server_id",
+    "version",
+    "active_peers",
+    "capabilities"
+  ],
+  "properties": {
+    "status": {
+      "type": "string"
+    },
+    "server_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "active_peers": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

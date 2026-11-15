@@ -1,4 +1,5 @@
 import pytest
+from fastapi import WebSocketDisconnect
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services.sockets import registry
@@ -190,3 +191,97 @@ def test_websocket_error_handling() -> None:
             error_msg = ws1.receive_json()
             assert error_msg["event_type"] == "ERROR"
             assert "Unsupported event type" in error_msg["payload"]["message"]
+
+
+def test_websocket_first_frame_timeout() -> None:
+    with TestClient(app) as client:
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/ws/orchestrator") as ws:
+                ws.receive_json()
+        assert exc_info.value.code == 1008
+
+
+def test_websocket_auth_token_verification(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_token", "secret123")
+
+    with TestClient(app) as client:
+        # 1. Connecting without token is rejected with 1008
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/ws/orchestrator") as ws:
+                ws.send_json({"peer_id": "peer-no-token", "nickname": "NoToken", "platform": "Linux"})
+                ws.receive_json()
+        assert exc_info.value.code == 1008
+
+        # 2. Connecting with wrong token is rejected with 1008
+        with pytest.raises(WebSocketDisconnect) as exc_info:
+            with client.websocket_connect("/ws/orchestrator") as ws:
+                ws.send_json({
+                    "peer_id": "peer-bad-token",
+                    "nickname": "BadToken",
+                    "platform": "Linux",
+                    "auth_token": "wrong-secret",
+                })
+                ws.receive_json()
+        assert exc_info.value.code == 1008
+
+        # 3. Connecting with correct token in top-level payload succeeds
+        with client.websocket_connect("/ws/orchestrator") as ws:
+            ws.send_json({
+                "peer_id": "peer-authed",
+                "nickname": "Authed",
+                "platform": "Linux",
+                "auth_token": "secret123",
+            })
+            roster = ws.receive_json()
+            assert roster["event_type"] == "PEER_LIST"
+            assert roster["payload"]["peers"][0]["peer_id"] == "peer-authed"
+
+
+def test_websocket_auth_token_nested_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    monkeypatch.setattr(settings, "auth_token", "secret123")
+
+    with TestClient(app) as client:
+        # Connecting with correct token in nested payload succeeds
+        with client.websocket_connect("/ws/orchestrator") as ws:
+            ws.send_json({
+                "event_type": "PEER_HANDSHAKE",
+                "payload": {
+                    "peer_id": "peer-authed-nested",
+                    "nickname": "NestedAuthed",
+                    "platform": "Linux",
+                    "auth_token": "secret123",
+                },
+            })
+            roster = ws.receive_json()
+            assert roster["event_type"] == "PEER_LIST"
+            assert roster["payload"]["peers"][0]["peer_id"] == "peer-authed-nested"
+            ws.send_json({"event_type": "HEARTBEAT", "payload": {}})
+            ws.receive_json()
+
+
+@pytest.mark.asyncio
+async def test_websocket_zero_wan_rejection() -> None:
+    events = []
+
+    async def receive():
+        return {"type": "websocket.connect"}
+
+    async def send(event):
+        events.append(event)
+
+    scope = {
+        "type": "websocket",
+        "path": "/ws/orchestrator",
+        "query_string": b"",
+        "headers": [],
+        "client": ("8.8.8.8", 12345),
+    }
+    await app(scope, receive, send)
+    assert any(e.get("type") == "websocket.close" and e.get("code") == 1008 for e in events)
+

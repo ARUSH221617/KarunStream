@@ -57,6 +57,14 @@ class MessageType(StrEnum):
     FILE = "file"
 
 
+class TransferStatus(StrEnum):
+    INIT = "INIT"
+    ACTIVE = "ACTIVE"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
@@ -198,7 +206,7 @@ class MessageRow(Base):
     conversation: Mapped["ConversationRow"] = relationship(back_populates="messages")
     sender: Mapped["UserRow"] = relationship(back_populates="messages")
     attachments: Mapped[list["MessageAttachmentRow"]] = relationship(
-        back_populates="message", cascade="all, delete-orphan"
+        back_populates="message", cascade="all, delete-orphan", lazy="selectin"
     )
 
 
@@ -243,3 +251,55 @@ class FileRecordRow(Base):
     created_at: Mapped[float] = mapped_column(Float, nullable=False, default=_now)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class TransferRow(Base):
+    """Resumable file transfer tracking row."""
+
+    __tablename__ = "transfers"
+
+    transfer_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    sender_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    recipient_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    total_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    committed_bytes: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    chunk_size: Mapped[int] = mapped_column(Integer, default=1048576, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default=TransferStatus.INIT, nullable=False)
+    sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    sha256_prefix: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    stored_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    download_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, nullable=False, default=_now)
+    updated_at: Mapped[float] = mapped_column(Float, nullable=False, default=_now)
+
+    chunks: Mapped[list["TransferChunkRow"]] = relationship(
+        "TransferChunkRow",
+        back_populates="transfer",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class TransferChunkRow(Base):
+    """Verified chunk hash and byte boundary record for a resumable transfer."""
+
+    __tablename__ = "transfer_chunks"
+    __table_args__ = (
+        Index("ix_transfer_chunks_transfer_chunk", "transfer_id", "chunk_index"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transfer_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("transfers.transfer_id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    byte_offset: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    byte_length: Mapped[int] = mapped_column(Integer, nullable=False)
+    block_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    transfer: Mapped["TransferRow"] = relationship("TransferRow", back_populates="chunks")
+
